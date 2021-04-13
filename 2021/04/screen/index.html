@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="https://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+
+  <title> screen - manager okien w terminalu tekstowym  &middot; kamm </title>
+
+  
+  <link rel="stylesheet" href="https://kamm.github.io/css/poole.css">
+  <link rel="stylesheet" href="https://kamm.github.io/css/syntax.css">
+  <link rel="stylesheet" href="https://kamm.github.io/css/hyde.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=PT+Sans:400,400italic,700|Abril+Fatface">
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+
+  <link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
+
+  <link href='https://fonts.googleapis.com/css?family=Raleway:400,300' rel='stylesheet' type='text/css'>
+
+  <script src="//ajax.googleapis.com/ajax/libs/webfont/1.4.7/webfont.js"></script>
+  <script>
+    WebFont.load({
+      google: {
+        families: ['Raleway']
+      }
+    });
+  </script>
+
+</head>
+
+<body>
+
+  <div class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <h1 class="brand"><a href="https://kamm.github.io">kamm</a></h1>
+      <p class="lead">
+       developer&#39;s blog 
+      </p>
+    </div>
+
+
+
+    <ul class="sidebar-nav">
+      <li><a href="https://kamm.github.io/blog">blog</a></li>
+      
+        <li><a href="/about/">o mnie </a></li>
+      
+      <br/>
+      
+      <li>kod</li>
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+                <li><a class="a" href="https://github.com/kamm/kody-pna">kody-pna </a></li>
+            
+        
+            
+        
+            
+                <li><a class="a" href="https://github.com/kamm/package-backup">package-backup </a></li>
+            
+        
+            
+        
+            
+                <li><a class="a" href="https://github.com/kamm/tomcat-watchdog">tomcat-watchdog </a></li>
+            
+        
+      
+    </ul>
+      <a href="https://www.facebook.com/kamil.metrak"><i class="fa fa-facebook-square"></i></a>&nbsp;&nbsp;
+      <a href="https://github.com/kamm"><i class="fa fa-github-square"></i></a>&nbsp;&nbsp;
+	  <a href="https://twitter.com/kmetrak"><i class="fa fa-twitter-square"></i></a>&nbsp;&nbsp;
+      <a href="https://www.linkedin.com/in/kamil-m%c4%99trak-56a63b43"><i class="fa fa-linkedin-square"></i></a>&nbsp;&nbsp;
+      
+
+    <p class="footnote">powered by <a href="http://hugo.spf13.com">Hugo</a> <br/>
+    &copy; 2021 Kamil Mętrak.<br/>
+	Some rights reserved.</p>
+    
+  </div>
+</div>
+
+
+  <div class="content container">
+    <div class="post">
+    <h1 class="post-title">screen - manager okien w terminalu tekstowym</h1>
+    <span class="post-date">13 kwietnia 2021</span>
+    
+    
+
+<p>Cześć.</p>
+
+<p>Od czasu pojawienia się koronawirusa cała moja praca odbywa się zdalnie. Niestety, wiele osób narzeka na stabilność VPNa - tym się nie będę zajmował ani wnikał w powody i propozycje rozwiązania. Zaproponuję pewną protezę, która pomoże w tym przypadku a jednocześnie da kilka innych możliwości pracy na systemach uniksowych.</p>
+
+<p>Generalnie pomysł jest prosty i jest obecny np. przy połączeniu pulpitem zdalnym - czyli gdy zostanie zerwane połączenie sieciowe z serwerem to sesja jest odłączana a nie zrywana. Oznacza to tyle, że gdy stracimy połączenie sieciowe to procesy uruchomione na pulpicie zdalnym cały czas działają i po pierwsze możemy je tak zostawić gdy chcemy pozostawić jakiś długo działający proces albo zabezpieczyć się przed właśnie takim zerwaniem połączenia - np. wykonujemy jakiś update na bazie danych lub budujemy coś mavenem. Tak samo jest gdy używamy VNC. Nie będę wnikał w inne rozwiązania bo ich nie znam.</p>
+
+<p>Ale nie zawsze chcemy używać środowiska graficznego - do wielu rzeczy wystarcza terminal - czyli wystarczy nam połączenie ssh. Jednak przy połączeniu SSH jeżeli połączenie zostanie zerwane to proces zostanie ubity. Czyli zbudowanie na serwerze aplikacji mavenem, gdzie budowa trwa godzinę nigdy się nie uda, gdy VPN zrywa połączenie po 30 minutach.</p>
+
+<p>I tu wchodzi cały na biało (he he) screen. Oczywiście, ktoś powie &ldquo;tmux może to samo i nawet więcej&rdquo;. Tak, ale screen jest dużo prostszy w użyciu i do tego zastosowania wystarczy. Jednocześnie jest on dobrym wstępem do późniejszego użycia tmuxa.</p>
+
+<p>Czym jest screen? Jak mówi <em>man</em> jest to pełnoekranowy manager okien, który multipleksuje fizyczny terminal pomiędzy kilkoma procesami.</p>
+
+<p>No dobra, ale to chyba nadal nie rozwiązuje problemu?</p>
+
+<p>Otóż <em>nic bardziej mylnego</em>. Taki zestaw okien można <em>odpiąć</em> i rozłączyć się z SSH, a procesy w nim uruchomione nadal będą działać. Gdy sesja, w której był uruchomiony screen zostanie zabita to screen się odłączy. Później można ponownie takiego screena podłączyć i kontynuować pracę.</p>
+
+<p>Najpierw instalacja, wprost z repozytorium odpowiedniego dla używanej dystrybucji.</p>
+
+<pre><code>sudo apt-get install screen
+sudo pacman -S screen
+</code></pre>
+
+<p>Konfigurować nie ma co - jedynym powodem do utworzenia pliku konfiguracyjnego jaki miałem była chęć zmiany domyślnego skrótu klawiszowego - Ctrl+a - na coś innego. Ale to było związane z tym, że zacząłem używać tmuxa, jego domyślny skrót mi nie pasował (Ctrl+b), zmieniłem go na ten, do którego byłem przyzwyczajony w screenie więc screena też trzeba było zmienić, ale to rodziło kolejne problemy i przestałem tak grzebać.</p>
+
+<p>Teraz czas na uruchomienie. Po prostu wpisujemy</p>
+
+<pre><code>screen
+</code></pre>
+
+<p>Czyli mamy Ctrl+a, polecenie które rozpoczyna właściwy skrót klawiszowy. Bo w końcu mamy różne skróty klawiszowe w różnych aplikacjach i chcielibyśmy móc z nich korzystać. O ile w vimie to nie problem, to już w emacsie używane są skróty z ctrl, a nawet bash ma ich kilka. Dlatego screen używa takich skrótów &ldquo;kolejkowanych&rdquo;. Po wciśnięciu <code>ctrl+a</code> dajemy właściwy skrót (np. <code>c</code>). Screen przyjmie je w dwóch możliwych wariantach i oba obsłuży tak samo - czyli <code>ctrl+a c</code> oraz <code>ctrl+a ctrl+c</code> - chodzi o to, czy puścimy ctrl przed drugim klawiszem czy nie. Dla screena to bez różnicy.</p>
+
+<p>Najważniejszym skrótem jest <code>ctrl+a d</code> - jest to odpięcie screena, czyli zostawiamy go działającego i wychodzimy do punktu uruchomienia.</p>
+
+<p>Aby wrócić do odpiętego screena wywołajmy</p>
+
+<pre><code>screen -r
+</code></pre>
+
+<p>Jeżeli screen jest gdzieś przypięty, np. w drugim xtermie to nie pozwoli się przypiąć. Wywołanie screen bez parametrów utworzy za to drugiego screena. Wtedy już nawet gdy oba będą odpięte to screen nie będzie wiedział do którego się podpiąć i wypisze listę - wtedy należy podać PID procesu do którego chcemy się podpiąć.</p>
+
+<p>Aby odpiąć screena podpiętego w innym oknie (lub np. w wiszącej sesji ssh) wywołujemy <code>screen -d</code>. A jeżeli chcemy od razu zakończyć też proces z którego został uruchomiony screen, który odpinamy (czyli np. zamknąć tamto okno xterma lub rozłączyć połączenie SSH) to używamy <code>screen -D</code>.</p>
+
+<p>Przydatne może być też <code>screen -R</code>. Oznacza to, że screen ma się podłączyć do istniejącej sesji. Jeżeli jest kilka to wypisze możliwe do podłączenia. Ale jeżeli nie znajdzie żadnej (żadnej nie ma lub nie ma żadnej niepodłączonej) to utworzy nową. <code>screen -RR</code> zadziała podobnie, ale jeżeli znajdzie kilka niepodłączonych sesji to podłączy się do pierwszej z brzegu.</p>
+
+<p>Opcje <code>-r</code>, <code>-R</code> oraz <code>-RR</code> można łączyć z <code>-d</code> i z <code>-D</code>. W takim wypadku uruchomienie <code>screen -D -RR</code> jest <em>najpotężniejsze</em> - bo zawsze da jakąś sesję.</p>
+
+<p>Teraz wróćmy do działającej sesji. Jeżeli zakończymy proces w screenie (ctrl+d, exit, logout, &hellip;) to zamkniemy okno w screenie. Jeżeli zamkniemy ostatnie okno to zamkniemy całego screena.</p>
+
+<p>Aby utworzyć nowe okno wywołujemy <code>ctrl+a c</code>. Pierwsze okno ma numer 0, następne 1 itd. Przełączanie pomiędzy oknami osiągniemy używając <code>ctrl+a 0</code>, <code>ctrl+a 1</code> itd. lub <code>ctrl+a n</code> i <code>ctrl+a p</code>. Tak samo jak <code>n</code> zadziała <code>spacja</code>, a w miejsce <code>p</code> możemy użyć <code>backspace</code>.</p>
+
+<p>Użycie <code>ctrl+a w</code> pokaże listę dostępnych okien.</p>
+
+<p>Warto też wiedzieć jak zabić okno - czasem jakiś proces się zawiesi. W xtermie po prostu zamykamy okno, w screenie jest do tego <code>ctrl+a k</code>.</p>
+
+<p>Tak na prawdę to wszystko co potrzeba wiedzieć na starcie. No może jeszcze <code>ctrl+a ?</code>, które zwróci przypisanie klawiszy. A, jeszcze - co jeżeli potrzebujemy użyć <code>ctrl+a</code> w aplikacji otwartej w screenie? używamy <code>ctrl+a a</code>.</p>
+
+<p>Z bardziej zaawansowanych rzeczy to zdarzyło mi się jeszcze korzystać z możliwości kopiowania w screenie przy użyciu klawiatury. Nie tyle do kopiowania ale do przewinięcia ekranu w górę. Służy do tego <code>ctrl+a [</code>, następnie przesuwamy ekran strzałkami i wciskamy <code>enter</code> aby rozpocząć kopiowanie. Zaznaczamy obszar używając znów strzałek i wciskamy ponownie <code>enter</code>. Teraz tekst jest skopiowany do schowka (ale screenowego, nie tego dostępnego przez np. xclip). do wklejenia służy <code>ctrl+a ]</code>.</p>
+
+<p>Innych funkcji chyba nie zdarzyło mi się używać, ale polecam mana do screena - jest chyba jednym z lepszych.</p>
+
+<h2 id="przenoszenie-procesu-do-screena">Przenoszenie procesu do screena</h2>
+
+<p>Teraz coś trochę trudniejszego - jak przenieść działający proces do screena? Czasem okazuje się, że jednak proces będzie działał dłużej. Jak to zrobić? Będzie potrzebne dodatkowe narzędzie - <code>reptyr</code>. Czyli</p>
+
+<pre><code>sudo apt-get install reptyr
+sudo pacman -S reptyr
+</code></pre>
+
+<p>czy co tam macie u siebie. Teraz po kolei:
+1. Zatrzymujemy proces (nie kończymy!!!) <code>Ctrl+z</code>
+2. Wznawiamy do w tle <code>bg</code>
+3. Odpinamy go od terminala <code>disown %1</code>
+4. Odpalamy screena <code>screen</code>
+5. Znajdujemy PID procesu (pojawił się wcześniej na ekranie)
+6. Przypinamy proces do bieżącego terminala <code>reptyr &lt;pid&gt;</code></p>
+
+<p>Reptyr może nie zadziałać - poleci komunikat</p>
+
+<pre><code>Unable to attach to pid 52543: Operation not permitted
+The kernel denied permission while attaching. If your uid matches
+the target's, check the value of /proc/sys/kernel/yama/ptrace_scope.
+For more information, see /etc/sysctl.d/10-ptrace.conf
+</code></pre>
+
+<p>Generalnie to jest to zabezpieczenie, aby nie-root nie mógł robić ptrace na procesach nie-potomnych. Aby wyłączyć to zabezpieczenie odpalamy</p>
+
+<pre><code>echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
+</code></pre>
+
+<p>co pozwoli na odpalenie reptyra, a po odpięciu screena możemy przywrócić domyślne ustawienie</p>
+
+<pre><code>echo 1 | sudo tee /proc/sys/kernel/yama/ptrace_scope
+</code></pre>
+
+<p>Tym sposobem mamy proces przeniesiony do screena. Oczywiście łatwiej jest proces normalnie uruchomić w screenie, ale czasem nie bardzo możemy ubić proces i odpalić go na nowo, wtedy trzeba się trochę bardziej narobić&hellip;</p>
+
+<p>Miłego screenowania!</p>
+
+    
+
+     
+	
+    <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    if (window.location.hostname == "localhost") 
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'kammgithubio';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the comments powered by <a href="http://disqus.com/?ref_noscript">Disqus.</a></noscript>
+</div>
+</div> 
+
+</body>
+</html>

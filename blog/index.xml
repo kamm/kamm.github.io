@@ -7,10 +7,21 @@
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
     <copyright>Kamil Mętrak</copyright>
-    <lastBuildDate>Fri, 25 May 2018 08:54:15 +0200</lastBuildDate>
+    <lastBuildDate>Tue, 13 Apr 2021 16:37:15 +0200</lastBuildDate>
     
 	<atom:link href="https://kamm.github.io/blog/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>screen - manager okien w terminalu tekstowym</title>
+      <link>https://kamm.github.io/2021/04/screen/</link>
+      <pubDate>Tue, 13 Apr 2021 16:37:15 +0200</pubDate>
+      
+      <guid>https://kamm.github.io/2021/04/screen/</guid>
+      <description>Cześć.
+Od czasu pojawienia się koronawirusa cała moja praca odbywa się zdalnie. Niestety, wiele osób narzeka na stabilność VPNa - tym się nie będę zajmował ani wnikał w powody i propozycje rozwiązania. Zaproponuję pewną protezę, która pomoże w tym przypadku a jednocześnie da kilka innych możliwości pracy na systemach uniksowych.
+Generalnie pomysł jest prosty i jest obecny np. przy połączeniu pulpitem zdalnym - czyli gdy zostanie zerwane połączenie sieciowe z serwerem to sesja jest odłączana a nie zrywana.</description>
+    </item>
     
     <item>
       <title>Programowanie kart inteligentnych - część 2 - komunikacja</title>
