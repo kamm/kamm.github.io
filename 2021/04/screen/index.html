@@ -185,13 +185,21 @@ sudo pacman -S screen
 sudo pacman -S reptyr
 </code></pre>
 
-<p>czy co tam macie u siebie. Teraz po kolei:
-1. Zatrzymujemy proces (nie kończymy!!!) <code>Ctrl+z</code>
-2. Wznawiamy do w tle <code>bg</code>
-3. Odpinamy go od terminala <code>disown %1</code>
-4. Odpalamy screena <code>screen</code>
-5. Znajdujemy PID procesu (pojawił się wcześniej na ekranie)
-6. Przypinamy proces do bieżącego terminala <code>reptyr &lt;pid&gt;</code></p>
+<p>czy co tam macie u siebie. Teraz po kolei:</p>
+
+<ol>
+<li><p>Zatrzymujemy proces (nie kończymy!!!) <code>Ctrl+z</code></p></li>
+
+<li><p>Wznawiamy do w tle <code>bg</code></p></li>
+
+<li><p>Odpinamy go od terminala <code>disown %1</code></p></li>
+
+<li><p>Odpalamy screena <code>screen</code></p></li>
+
+<li><p>Znajdujemy PID procesu (pojawił się wcześniej na ekranie)</p></li>
+
+<li><p>Przypinamy proces do bieżącego terminala <code>reptyr &lt;pid&gt;</code></p></li>
+</ol>
 
 <p>Reptyr może nie zadziałać - poleci komunikat</p>
 

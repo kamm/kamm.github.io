@@ -86,13 +86,21 @@ sudo pacman -S screen
 sudo pacman -S reptyr
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;czy co tam macie u siebie. Teraz po kolei:
-1. Zatrzymujemy proces (nie kończymy!!!) &lt;code&gt;Ctrl+z&lt;/code&gt;
-2. Wznawiamy do w tle &lt;code&gt;bg&lt;/code&gt;
-3. Odpinamy go od terminala &lt;code&gt;disown %1&lt;/code&gt;
-4. Odpalamy screena &lt;code&gt;screen&lt;/code&gt;
-5. Znajdujemy PID procesu (pojawił się wcześniej na ekranie)
-6. Przypinamy proces do bieżącego terminala &lt;code&gt;reptyr &amp;lt;pid&amp;gt;&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;czy co tam macie u siebie. Teraz po kolei:&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;&lt;p&gt;Zatrzymujemy proces (nie kończymy!!!) &lt;code&gt;Ctrl+z&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Wznawiamy do w tle &lt;code&gt;bg&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Odpinamy go od terminala &lt;code&gt;disown %1&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Odpalamy screena &lt;code&gt;screen&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Znajdujemy PID procesu (pojawił się wcześniej na ekranie)&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Przypinamy proces do bieżącego terminala &lt;code&gt;reptyr &amp;lt;pid&amp;gt;&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+&lt;/ol&gt;
 
 &lt;p&gt;Reptyr może nie zadziałać - poleci komunikat&lt;/p&gt;
 
