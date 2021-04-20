@@ -7,7 +7,33 @@
     <language>en-us</language>
     <author>Kamil Mętrak</author>
     <copyright>2021 Kamil Mętrak</copyright>
-    <updated>Tue, 13 Apr 2021 16:37:15 CEST</updated>
+    <updated>Tue, 20 Apr 2021 20:18:00 CEST</updated>
+    
+    
+    <item>
+      <title>Suckless po mojemu</title>
+      <link>https://kamm.github.io/2021/04/suckless-po-mojemu/</link>
+      <pubDate>Tue, 20 Apr 2021 20:18:00 CEST</pubDate>
+      <author>Kamil Mętrak</author>
+      <guid>https://kamm.github.io/2021/04/suckless-po-mojemu/</guid>
+      <description>&lt;p&gt;Tym razem znów o narzędziach z których korzystam. Zacznę od tego jak na to trafiłem. Oglądałem sobie tak z nudów youtuba i wpadł mi film Zmasło o tym, że zainstalował archa. Wtedy jeszcze nie byłem przekonany do tej dystrybucji, ale przejrzałem sobie co on tam ma - tiling managery do mnie nie przemawiają, ale zainteresował mnie st - simple terminal (lub jak inni wolą mowić suckless terminal). Zacząłem się interesować narzędziami suckless i miałem trochę mieszane uczucia. Z tego samego filmu dowiedziałem się też o kanale Luke&amp;rsquo;a Smitha. Gość opowiada fajne rzeczy o linuksie (czasem ogólnie, czasem specyficznie o archu), minimalistycznych narzedziach, filozofii wolnego oprogramowania - generalnie polecam.&lt;/p&gt;
+
+&lt;p&gt;Luke Smith udostępnił kilka ciekawych modyfikacji do st i spodobały mi się. Niestety, przynajmniej jedna z nich jest łatwa do ogarnięcia tylko na archu, ale to już dla mnie nie problem 😀. Tak zacząłem korzystać z st w miejsce urxvt.&lt;/p&gt;
+
+&lt;p&gt;Może trochę powiem o suckless. Te narzędzia są dosyć specyficzne. Filozofia suckless to narzędzia proste, możliwie przejrzyście napisane, o jak najmniejszej ilości kodu (czyli bez niepotrzebnych funkcjonalności). Tu przyładowo o st - xterm ma ok. 65k linii kodu, przedewszystkim ze względu na wsparcie dla emulacji różnych archaicznych terminali. Rxvt-unicode lub inaczej urxvt ma ok. 32k linii kodu. st ma ok 7k linii kodu. Jednak nie wszystko jest takie piękne. Narzędzia suckless oszczędzają linie kodu rezygnując także z plików konfiguracyjnych. Konfiguracja we wszystkich programach odbywa się poprzez edycję pliku config.h i przebudowanie programu. Z tego wynika kolejny problem - nie da się tego spaczkować i umieścić np. w repozytorium archa lub debiana - bo nie można tego konfigurować.&lt;/p&gt;
+
+&lt;p&gt;I tu zaczyna się moje ale do suckless. O ile terminal konfiguruje się w zasadzie raz i tyle, to w pakiecie suckless jest program do prowadzenia prezentacji - sent. Niby fajne, ale aby zmienić kolor tła lub font w prezentacji należy przekompilować sent. To nie pasuje.&lt;/p&gt;
+
+&lt;p&gt;Suckless ma teź swoj manager okien, jednak jest to manager kafelkowy (chyba tak należałoby przetłumaczyć tiling), ale to mi nie leży i na razie zostanę przy openboksie.&lt;/p&gt;
+
+&lt;p&gt;Jednak kolejne narzędzie tu już co innego - dmenu. W skrócie - jest to dynamiczne menu, z którego bardzo miło korzysta się w skryptach. Obsługiwane oczywiście w całości klawiaturą. W którymś następnym wpisie opiszę skrypty, z których korzystam.&lt;/p&gt;
+
+&lt;p&gt;Podsumowując - część rozwiązań suckless jest rzeczywiście fajnych, a ich minimalizm naprawdę fajny. Jednak druga część tych narzędzi to suckmore - zdecydowanie odbiegające od reszty, niezbyt przemyślane. Mam wrażenie, że taki sent był napisany po to aby przeprowadzić jedną prezentację, ewentualnie - programista napisał go tylko dla siebie i pod siebie.&lt;/p&gt;
+
+&lt;p&gt;Tyle&amp;hellip;&lt;/p&gt;
+</description>
+    </item>
+    
     
     
     <item>
@@ -91,13 +117,13 @@ sudo pacman -S reptyr
 &lt;ol&gt;
 &lt;li&gt;&lt;p&gt;Zatrzymujemy proces (nie kończymy!!!) &lt;code&gt;Ctrl+z&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
 
-&lt;li&gt;&lt;p&gt;Wznawiamy do w tle &lt;code&gt;bg&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;Wznawiamy go w tle &lt;code&gt;bg&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
 
 &lt;li&gt;&lt;p&gt;Odpinamy go od terminala &lt;code&gt;disown %1&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
 
 &lt;li&gt;&lt;p&gt;Odpalamy screena &lt;code&gt;screen&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
 
-&lt;li&gt;&lt;p&gt;Znajdujemy PID procesu (pojawił się wcześniej na ekranie)&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;Znajdujemy PID procesu (pojawił się wcześniej na ekranie albo szukamy przy uzyciu ps, pstree, pgrep, czegokolwiek)&lt;/p&gt;&lt;/li&gt;
 
 &lt;li&gt;&lt;p&gt;Przypinamy proces do bieżącego terminala &lt;code&gt;reptyr &amp;lt;pid&amp;gt;&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
 &lt;/ol&gt;

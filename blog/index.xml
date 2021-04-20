@@ -7,10 +7,19 @@
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
     <copyright>Kamil Mętrak</copyright>
-    <lastBuildDate>Tue, 13 Apr 2021 16:37:15 +0200</lastBuildDate>
+    <lastBuildDate>Tue, 20 Apr 2021 20:18:00 +0200</lastBuildDate>
     
 	<atom:link href="https://kamm.github.io/blog/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Suckless po mojemu</title>
+      <link>https://kamm.github.io/2021/04/suckless-po-mojemu/</link>
+      <pubDate>Tue, 20 Apr 2021 20:18:00 +0200</pubDate>
+      
+      <guid>https://kamm.github.io/2021/04/suckless-po-mojemu/</guid>
+      <description>Tym razem znów o narzędziach z których korzystam. Zacznę od tego jak na to trafiłem. Oglądałem sobie tak z nudów youtuba i wpadł mi film Zmasło o tym, że zainstalował archa. Wtedy jeszcze nie byłem przekonany do tej dystrybucji, ale przejrzałem sobie co on tam ma - tiling managery do mnie nie przemawiają, ale zainteresował mnie st - simple terminal (lub jak inni wolą mowić suckless terminal). Zacząłem się interesować narzędziami suckless i miałem trochę mieszane uczucia.</description>
+    </item>
     
     <item>
       <title>screen - manager okien w terminalu tekstowym</title>
