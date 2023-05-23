@@ -7,10 +7,49 @@
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
     <copyright>Kamil Mętrak</copyright>
-    <lastBuildDate>Fri, 25 May 2018 08:54:15 +0200</lastBuildDate>
+    <lastBuildDate>Mon, 22 May 2023 21:10:15 +0100</lastBuildDate>
     
 	<atom:link href="https://kamm.github.io/blog/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Instalacja klastra OKD/Openshift </title>
+      <link>https://kamm.github.io/2023/05/okd/</link>
+      <pubDate>Mon, 22 May 2023 21:10:15 +0100</pubDate>
+      
+      <guid>https://kamm.github.io/2023/05/okd/</guid>
+      <description>Wstęp Do nauki OpenShifta potrzebowałem jakiejś instacji deweloperskiej &amp;ldquo;do psucia&amp;rdquo;. Głowne założenia - wsyztko musi być na maszynach wirtualnych, do uruchomienia na VirtualBoksie lub VMWare Workstation. Klaster ma składać się z 3 wezłów typu Control Plane (w dalszej części będę je nazywał master), które też obsługuja ruch aplikacyjny - czyli nie ma osobnych Compute Node. Takie rozwiązanie będzie odzwierciedlało klaster OpenShifta, na którym pracuję w firmie, ale ten mogę łatwiej psuć.</description>
+    </item>
+    
+    <item>
+      <title>Linux - historia prawdziwa</title>
+      <link>https://kamm.github.io/2021/04/linux-historia-prawdziwa/</link>
+      <pubDate>Thu, 22 Apr 2021 15:56:15 +0200</pubDate>
+      
+      <guid>https://kamm.github.io/2021/04/linux-historia-prawdziwa/</guid>
+      <description>Tym razem będzie bardziej blognotka. Wielokrotnie byłem określany jako &amp;ldquo;ten windowsiarz&amp;rdquo;, co dla osób, które znają mnie trochę dłużej będzie zdziwieniem. Ale może po kolei.
+Gdy zacząłem studia najpopularniejszymi systemami były 2 windowsy - 98 i 2000 (o ME chyba wszyscy chcą zapomnieć). Był to rok 2001, czyli chwila przed pojawieniem się XP. Z linuksem (dobra, GNU/Linux) miałem minimalne doświadczenie - próbowałem używać wcześniej RedHata (5.1 Manhattan), Monkey Linux, był też Mandrake Linux, ale tak jakoś nigdy w ten temat głębiej nie wszedłem.</description>
+    </item>
+    
+    <item>
+      <title>Suckless po mojemu</title>
+      <link>https://kamm.github.io/2021/04/suckless-po-mojemu/</link>
+      <pubDate>Tue, 20 Apr 2021 20:18:00 +0200</pubDate>
+      
+      <guid>https://kamm.github.io/2021/04/suckless-po-mojemu/</guid>
+      <description>Tym razem znów o narzędziach z których korzystam. Zacznę od tego jak na to trafiłem. Oglądałem sobie tak z nudów youtuba i wpadł mi film Zmasło o tym, że zainstalował archa. Wtedy jeszcze nie byłem przekonany do tej dystrybucji, ale przejrzałem sobie co on tam ma - tiling managery do mnie nie przemawiają, ale zainteresował mnie st - simple terminal (lub jak inni wolą mowić suckless terminal). Zacząłem się interesować narzędziami suckless i miałem trochę mieszane uczucia.</description>
+    </item>
+    
+    <item>
+      <title>screen - manager okien w terminalu tekstowym</title>
+      <link>https://kamm.github.io/2021/04/screen/</link>
+      <pubDate>Tue, 13 Apr 2021 16:37:15 +0200</pubDate>
+      
+      <guid>https://kamm.github.io/2021/04/screen/</guid>
+      <description>Cześć.
+Od czasu pojawienia się koronawirusa cała moja praca odbywa się zdalnie. Niestety, wiele osób narzeka na stabilność VPNa - tym się nie będę zajmował ani wnikał w powody i propozycje rozwiązania. Zaproponuję pewną protezę, która pomoże w tym przypadku a jednocześnie da kilka innych możliwości pracy na systemach uniksowych.
+Generalnie pomysł jest prosty i jest obecny np. przy połączeniu pulpitem zdalnym - czyli gdy zostanie zerwane połączenie sieciowe z serwerem to sesja jest odłączana a nie zrywana.</description>
+    </item>
     
     <item>
       <title>Programowanie kart inteligentnych - część 2 - komunikacja</title>

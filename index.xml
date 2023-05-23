@@ -6,8 +6,985 @@
     <link>https://kamm.github.io/</link>
     <language>en-us</language>
     <author>Kamil Mętrak</author>
-    <copyright>2018 Kamil Mętrak</copyright>
-    <updated>Fri, 25 May 2018 08:54:15 CEST</updated>
+    <copyright>2023 Kamil Mętrak</copyright>
+    <updated>Mon, 22 May 2023 21:10:15 &#43;0100</updated>
+    
+    
+    <item>
+      <title>Instalacja klastra OKD/Openshift </title>
+      <link>https://kamm.github.io/2023/05/okd/</link>
+      <pubDate>Mon, 22 May 2023 21:10:15 &#43;0100</pubDate>
+      <author>Kamil Mętrak</author>
+      <guid>https://kamm.github.io/2023/05/okd/</guid>
+      <description>
+
+&lt;h2 id=&#34;wstęp&#34;&gt;Wstęp&lt;/h2&gt;
+
+&lt;p&gt;Do nauki OpenShifta potrzebowałem jakiejś instacji deweloperskiej &amp;ldquo;do psucia&amp;rdquo;. Głowne założenia - wsyztko musi być na maszynach wirtualnych, do uruchomienia na VirtualBoksie lub VMWare Workstation. Klaster ma składać się z 3 wezłów typu Control Plane (w dalszej części będę je nazywał master), które też obsługuja ruch aplikacyjny - czyli nie ma osobnych Compute Node. Takie rozwiązanie będzie odzwierciedlało klaster OpenShifta, na którym pracuję w firmie, ale ten mogę łatwiej psuć. Poza klasterem bedzie postawiona 1 dodatkowa maszyna - okd-bastion. Poza typowymi dla bastiona funkcjami (dostęp do klastra przez oc/kubectl) będzie też routerem, firewallem, serwerem DHCP, DNS, HTTP (potrzebne tylko na etapie instalacji w celu dostarczenia plików konfiguracyjnych instalatora), HAProxy oraz NFS dla storage&amp;rsquo;u klastra - w skrócie maszyną do wszystkiego poza OKD.&lt;/p&gt;
+
+&lt;p&gt;Jeszcze tak na szybko - co to jest OKD? OKD to &amp;ldquo;The Community Distribution of Kubernetes that powersRed Hat OpenShift&amp;rdquo; - czyli w zasadzie darmowa wersja OpenShifta, która ma kilka ograniczeń, ale w wiekszości są to braki oficjalnych i certyfikowanych operatorów, dostarczanych w ramach OpenShifta. Co ciekawe - dotarły do mnie słuchy o przynajmniej jednej firmie, która migruje się lub luż się przemigrowała z OpenShifta na OKD w swoich środowiskach produkcyjnych.&lt;/p&gt;
+
+&lt;h2 id=&#34;postawienie-maszyn-wirtualnych&#34;&gt;Postawienie maszyn wirtualnych&lt;/h2&gt;
+
+&lt;p&gt;Będę uzywał VMWare Workstation, ale da się to wszystko zrobić np. na VirtualBoksie. Zaczynamy od wykreowania sieci - uruchamiam Virtual Network Editor i dodaję nową sieć (VMnet10) typu Host-only, IP podsieci 192.168.64.0, maska 255.255.255.0. Ważne - wyłączam DHCP dla tej sieci (będziemy stawiać własne DHCP). DHCP ze strony VMWare Workstation nie ma możliwości przypisania trwałych IP dla MAC Adresu.&lt;/p&gt;
+
+&lt;p&gt;Następnie tworzę 5 maszyn wirtualnych:
+* okd-bastion
+* okd-bootstrap
+* okd-master01
+* okd-master02
+* okd-master03
+Każda z nich ma 4 rdzenie, 8192 MiB RAM i 120GiB dysku. Ewentualnie, dla maszyny okd-bastion można dać więcej (a nawet sporo więcej) dysku, bo będzie potrzebny dla NFSa. Ja dodałem drugi dysk (500GiB) później.&lt;/p&gt;
+
+&lt;p&gt;Dla okd-bastion dodałem 2 interfejsy sieciowe - pierwszy jako bridged network, drugi jako host-only ze wskazaniem sieci na VMnet10.&lt;/p&gt;
+
+&lt;p&gt;Na maszynach bootrap i masterach należy podmontować iso Fedora CoreOS &lt;a href=&#34;https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/38.20230430.3.1/x86_64/fedora-coreos-38.20230430.3.1-live.x86_64.iso&#34;&gt;https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/38.20230430.3.1/x86_64/fedora-coreos-38.20230430.3.1-live.x86_64.iso&lt;/a&gt; - ja odpaliłem maszyny i wciśnąłem TAB na etapie boot loadera - aby system nie startował, ale maszyna aby była uruchomiona - bo potrzebuję pobrać ich MAC adresy, a te w VMWare są losowane po uruchomieniu.&lt;/p&gt;
+
+&lt;h2 id=&#34;maszyna-okd-bastion&#34;&gt;Maszyna okd-bastion&lt;/h2&gt;
+
+&lt;p&gt;Teraz okd-bastion. Zainstalowałem na niej Oracle Linux 9.2, ale może być w zasadzie dowolny linux. Bez żadnych dziwactw, może poza tym, że dałem całość na 1 FS (czyli dysk podmontowany jako /, bez osobnych dla /home itp).&lt;/p&gt;
+
+&lt;p&gt;Po instalacji należy doinstalować kilka pakietów:
+- epel-release
+- bind
+- bind-utils
+- haproxy
+- dhcp-server
+- httpd nfs-utils
+- git&lt;/p&gt;
+
+&lt;p&gt;Dodatkowo warto zainstalować jq&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;wget -O jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+chmod +x jq
+sudo mv jq /usr/local/bin/
+jq --version
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;konfiguracja-firewalla&#34;&gt;Konfiguracja firewalla&lt;/h3&gt;
+
+&lt;p&gt;U mnie interfejs zewnętrzny bastiona to enp160, który ma adres IP nadawany dynamicznie przez mój router. Drugim interfejsem jest enp192, który ma podany adres statyczny 192.168.64.1.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;nmcli c mod ens192 connection.zone internal
+nmcli c mod ens160 connection.zone external
+firewall-cmd --permanent --zone=external --add-masquerade
+firewall-cmd --permanent --zone=internal --add-masquerade
+firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -o enp160 -j MASQUERADE
+firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -i enp192 -o enp160 -j ACCEPT
+firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -i enp160 -o enp192 -m state --state RELATED,ESTABLISHED -j ACCEPT
+firewall-cmd --permanent --zone=external --add-port=9000/tcp
+firewall-cmd --permanent --zone=external --add-port=80/tcp
+firewall-cmd --permanent --zone=external --add-port=443/tcp
+firewall-cmd --permanent --zone=trusted --add-source=192.168.64.0/24
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;konfiguracja-dhcp&#34;&gt;Konfiguracja DHCP&lt;/h3&gt;
+
+&lt;p&gt;/etc/dhcp/dhcpd.conf - tu trzeba wstawić własne MAC adresy dla bootstrapa i masterów.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;authoritative;
+ddns-update-style interim;
+default-lease-time 14400;
+max-lease-time 14400;
+
+option routers                  192.168.64.1;
+option broadcast-address        192.168.64.255;
+option subnet-mask              255.255.255.0;
+option domain-name-servers      192.168.64.1;
+option domain-search            &amp;quot;okd.lab.local&amp;quot;;
+option domain-name-servers      192.168.64.1;
+option domain-name              &amp;quot;okd.lab.local&amp;quot;;
+
+subnet 192.168.64.0 netmask 255.255.255.0 {
+  interface ens192;
+  pool {
+    range 192.168.64.21 192.168.64.60;
+    # Static entries
+    host okd-bootstrap { hardware ethernet 00:0C:29:D5:20:56; fixed-address 192.168.64.200; option host-name &amp;quot;okd-bootstrap&amp;quot;;}
+    host master01 { hardware ethernet 00:0C:29:08:EB:27; fixed-address 192.168.64.201; option host-name &amp;quot;okd-master01&amp;quot;;}
+    host master02 { hardware ethernet 00:0C:29:C0:B8:B3; fixed-address 192.168.64.202; option host-name &amp;quot;okd-master02&amp;quot;;}
+    host master03 { hardware ethernet 00:0C:29:AA:CC:72; fixed-address 192.168.64.203; option host-name &amp;quot;okd-master03&amp;quot;;}
+    # this will not give out addresses to hosts not listed above
+    # deny unknown-clients;
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;konfiguracja-dnsa-named&#34;&gt;Konfiguracja DNSa (named)&lt;/h3&gt;
+
+&lt;p&gt;/etc/named.conf&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;options {
+        listen-on port 53 { any; };
+#       listen-on-v6 port 53 { ::1; };
+        directory       &amp;quot;/var/named&amp;quot;;
+        dump-file       &amp;quot;/var/named/data/cache_dump.db&amp;quot;;
+        statistics-file &amp;quot;/var/named/data/named_stats.txt&amp;quot;;
+        memstatistics-file &amp;quot;/var/named/data/named_mem_stats.txt&amp;quot;;
+        recursing-file  &amp;quot;/var/named/data/named.recursing&amp;quot;;
+        secroots-file   &amp;quot;/var/named/data/named.secroots&amp;quot;;
+        allow-query     { any; };
+
+        /*
+         - If you are building an AUTHORITATIVE DNS server, do NOT enable recursion.
+         - If you are building a RECURSIVE (caching) DNS server, you need to enable
+           recursion.
+         - If your recursive DNS server has a public IP address, you MUST enable access
+           control to limit queries to your legitimate users. Failing to do so will
+           cause your server to become part of large scale DNS amplification
+           attacks. Implementing BCP38 within your network would greatly
+           reduce such attack surface
+        */
+        recursion yes;
+        forwarders {
+                8.8.8.8;
+                8.8.4.4;
+        };
+
+        //dnssec-enable yes;
+        //dnssec-validation yes;
+
+        /* Path to ISC DLV key */
+        bindkeys-file &amp;quot;/etc/named.root.key&amp;quot;;
+
+        managed-keys-directory &amp;quot;/var/named/dynamic&amp;quot;;
+
+        pid-file &amp;quot;/run/named/named.pid&amp;quot;;
+        session-keyfile &amp;quot;/run/named/session.key&amp;quot;;
+};
+
+logging {
+        channel default_debug {
+                file &amp;quot;data/named.run&amp;quot;;
+                severity dynamic;
+        };
+};
+
+zone &amp;quot;.&amp;quot; IN {
+        type hint;
+        file &amp;quot;named.ca&amp;quot;;
+};
+
+include &amp;quot;/etc/named.rfc1912.zones&amp;quot;;
+include &amp;quot;/etc/named.root.key&amp;quot;;
+include &amp;quot;/etc/named/named.conf.local&amp;quot;;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;/etc/named/named.conf.local&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;zone &amp;quot;okd.lab.local&amp;quot; {
+    type master;
+    file &amp;quot;/etc/named/zones/db.okd.local&amp;quot;; # zone file path
+};
+
+
+zone &amp;quot;64.168.192.in-addr.arpa&amp;quot; {
+    type master;
+    file &amp;quot;/etc/named/zones/db.192.168.64&amp;quot;;  # 192.168.64.0/24 subnet
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;/etc/named/zones/db.okd.local&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$TTL    604800
+@       IN      SOA     okd-bastion.okd.lab.local. admin.okd.lab.local. (
+                  2     ; Serial
+             604800     ; Refresh
+              86400     ; Retry
+            2419200     ; Expire
+             604800     ; Negative Cache TTL
+)
+
+; name servers - NS records
+    IN      NS      okd-bastion
+
+; name servers - A records
+okd-bastion.okd.lab.local.          IN      A       192.168.64.1
+
+; OpenShift Container Platform Cluster - A records
+okd-bootstrap.okd.lab.local.        IN      A      192.168.64.200
+okd-master01.okd.lab.local.         IN      A      192.168.64.201
+okd-master02.okd.lab.local.         IN      A      192.168.64.202
+okd-master03.okd.lab.local.         IN      A      192.168.64.203
+
+; OpenShift internal cluster IPs - A records
+api.okd.lab.local.    IN    A    192.168.64.1
+api-int.okd.lab.local.    IN    A    192.168.64.1
+*.apps.okd.lab.local.    IN    A    192.168.64.1
+etcd-0.okd.lab.local.    IN    A     192.168.64.201
+etcd-1.okd.lab.local.    IN    A     192.168.64.202
+etcd-2.okd.lab.local.    IN    A    192.168.64.203
+console-openshift-console.apps.okd.lab.local.     IN     A     192.168.64.1
+oauth-openshift.apps.okd.lab.local.     IN     A     192.168.64.1
+
+; OpenShift internal cluster IPs - SRV records
+_etcd-server-ssl._tcp.okd.lab.local.    86400     IN    SRV     0    10    2380    etcd-0.lab
+_etcd-server-ssl._tcp.okd.lab.local.    86400     IN    SRV     0    10    2380    etcd-1.lab
+_etcd-server-ssl._tcp.okd.lab.local.    86400     IN    SRV     0    10    2380    etcd-2.lab
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;/etc/named/zones/db.192.168.64&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$TTL    604800
+@       IN      SOA     okd-bastion.okd.lab.local. admin.okd.lab.local. (
+                  7     ; Serial
+             604800     ; Refresh
+              86400     ; Retry
+            2419200     ; Expire
+             604800     ; Negative Cache TTL
+)
+
+; name servers - NS records
+       IN    NS     okd-bastion.okd.lab.local.
+
+; name servers - PTR records
+1      IN    PTR    okd-services.okd.lab.local.
+
+; OpenShift Container Platform Cluster - PTR records
+200    IN    PTR    okd-bootstrap.okd.lab.local.
+201    IN    PTR    okd-master01.okd.lab.local.
+202    IN    PTR    okd-master02.okd.lab.local.
+203    IN    PTR    okd-master03.okd.lab.local.
+1      IN    PTR    api.okd.lab.local.
+1      IN    PTR    api-int.okd.lab.local.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;konfiguracja-haproxy&#34;&gt;Konfiguracja haproxy&lt;/h3&gt;
+
+&lt;p&gt;/etc/haproxy/haproxy.cfg&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# Global settings
+#---------------------------------------------------------------------
+global
+    maxconn     20000
+    log         /dev/log local0 info
+    chroot      /var/lib/haproxy
+    pidfile     /var/run/haproxy.pid
+    user        haproxy
+    group       haproxy
+    daemon
+
+    # turn on stats unix socket
+    stats socket /var/lib/haproxy/stats
+
+#---------------------------------------------------------------------
+# common defaults that all the &#39;listen&#39; and &#39;backend&#39; sections will
+# use if not designated in their block
+#---------------------------------------------------------------------
+defaults
+    mode                    http
+    log                     global
+    option                  httplog
+    option                  dontlognull
+    option http-server-close
+    option forwardfor       except 127.0.0.0/8
+    option                  redispatch
+    retries                 3
+    timeout http-request    10s
+    timeout queue           1m
+    timeout connect         10s
+    timeout client          300s
+    timeout server          300s
+    timeout http-keep-alive 10s
+    timeout check           10s
+    maxconn                 20000
+
+listen stats
+    bind :9000
+    mode http
+    stats enable
+    stats uri /
+    stats refresh 15s
+    monitor-uri /healthz
+
+
+
+frontend okd_api_fe_6443
+    bind :6443
+    default_backend okd_api_be_6443
+    mode tcp
+    option tcplog
+
+backend okd_api_be_6443
+    balance source
+    mode tcp
+    server      okd-bootstrap 192.168.64.200:6443 check
+    server      okd-master01 192.168.64.201:6443 check
+    server      okd-master02 192.168.64.202:6443 check
+    server      okd-master03 192.168.64.203:6443 check
+
+frontend okd_machine_config_server_fe_22623
+    bind :22623
+    default_backend okd_machine_config_server_be_22623
+    mode tcp
+    option tcplog
+
+backend okd_machine_config_server_be_22623
+    balance source
+    mode tcp
+    server      okd-bootstrap 192.168.64.200:22623 check
+    server      okd-master01 192.168.64.201:22623 check
+    server      okd-master02 192.168.64.202:22623 check
+    server      okd-master03 192.168.64.203:22623 check
+
+frontend okd_http_ingress_traffic_fe_80
+    bind :80
+    default_backend okd_http_ingress_traffic_be_80
+    mode tcp
+    option tcplog
+
+backend okd_http_ingress_traffic_be_80
+    balance source
+    mode tcp
+    server      okd-bootstrap 192.168.64.200:80 check
+    server      okd-master01 192.168.64.201:80 check
+    server      okd-master02 192.168.64.202:80 check
+    server      okd-master03 192.168.64.203:80 check
+
+frontend okd_https_ingress_traffic_fe_443
+    bind *:443
+    default_backend okd_https_ingress_traffic_be_443
+    mode tcp
+    option tcplog
+
+backend okd_https_ingress_traffic_be_443
+    balance source
+    mode tcp
+    server      okd-bootstrap 192.168.64.200:443 check
+    server      okd-master01 192.168.64.201:443 check
+    server      okd-master02 192.168.64.202:443 check
+    server      okd-master03 192.168.64.203:443 check
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;konfiguracja-apache-httpd&#34;&gt;Konfiguracja Apache HTTPD&lt;/h3&gt;
+
+&lt;p&gt;Tu akurat najprościej - wszystko co trzeba zmienić to port serwera HTTP (bo 80 będzie zajęta przez haproxy)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo sed -i &#39;s/Listen 80/Listen 8080/&#39; /etc/httpd/conf/httpd.conf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;konfiguracja-nfsa&#34;&gt;Konfiguracja NFSa&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo systemctl enable nfs-server rpcbind
+sudo systemctl start nfs-server rpcbind
+sudo mkdir -p /var/nfs
+sudo chmod -R 777 /var/nfs
+sudo chown -R nobody:nobody /var/nfs
+echo &#39;/var/nfs 192.168.64.0/24(rw,sync,no_root_squash,no_all_squash,no_wdelay)&#39; | sudo tee /etc/exports
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;rozpoczęcie-instalacji-okd&#34;&gt;Rozpoczęcie instalacji OKD&lt;/h2&gt;
+
+&lt;p&gt;Sama instalacja OKD składa się z 2 części.&lt;/p&gt;
+
+&lt;p&gt;Pierwszą jest przygotowanie plików instalacyjnych. Te pliki będą zawierały całą startową konfigurację klastra (którą pozostawiam domyślną) i wskazanie kluczy SSH do załadowania na maszynach oraz pull secretów do pobrania obrazów z registry redhatowych. Z tych plików następnie są generowane pliki ignition, które zawierają instrukcje dla instalatora Fedora CoreOS, który robi całą resztę.&lt;/p&gt;
+
+&lt;p&gt;W drugim etapie nejpierw odpalamy instalację CoreOSa na maszynie okd-bootstrap, gdzie zostaje postawiony minimalistyczny klaster, do którego następnie zostają dopięte węzły master. W momencie, gdy klaster na nodach master będzie juz w stanie sam działać to bootstrap się złozy i nie będzie więcej potrzebny - można go wyłączyć i usunąć. Z tego powodu nawet przy instalacjach typu baremetal maszyna bootstrap jest stawiana jako wirtualna - bo jest potrzebna tylko podczas instalacji.&lt;/p&gt;
+
+&lt;h3 id=&#34;pull-secret&#34;&gt;pull secret&lt;/h3&gt;
+
+&lt;p&gt;Potrzebne będą nam pull secrety do pobrania obrazów z registry RedHata. Można to rozwiązać na przynajmniej 2 sposoby - użyć domyślnych lub założyć konto w RedHacie i pobrać stamtąd.
+Domyślne pull secret to&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+	“auths”:{
+		“fake”:{“auth”: “bar”}
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Pozwalają one na instalację klastra, ale nie dają dostępu do wszystkich operatorów, dlatego warto pobrać sobie pull secrety ze strony RedHata.
+&lt;a href=&#34;https://console.redhat.com/openshift/install/pull-secret&#34;&gt;https://console.redhat.com/openshift/install/pull-secret&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{&amp;quot;auths&amp;quot;:{
+	&amp;quot;cloud.openshift.com&amp;quot;:{&amp;quot;auth&amp;quot;:&amp;quot;base64&amp;quot;,&amp;quot;email&amp;quot;:&amp;quot;email@wp.pl&amp;quot;},
+	&amp;quot;quay.io&amp;quot;:{&amp;quot;auth&amp;quot;:&amp;quot;BASE64&amp;quot;,&amp;quot;email&amp;quot;:&amp;quot;email@wp.pl&amp;quot;},
+	&amp;quot;registry.connect.redhat.com&amp;quot;:{&amp;quot;auth&amp;quot;:&amp;quot;BASE64&amp;quot;,&amp;quot;email&amp;quot;:&amp;quot;email@wp.pl&amp;quot;},
+	&amp;quot;registry.redhat.io&amp;quot;:{&amp;quot;auth&amp;quot;:&amp;quot;BASE64&amp;quot;,&amp;quot;email&amp;quot;:&amp;quot;email@wp.pl&amp;quot;}
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;klucze-ssh&#34;&gt;Klucze SSH&lt;/h3&gt;
+
+&lt;p&gt;Tu sprawa jest dużo prostsza - czyli generujemy klucze SSH.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ssh-keygen
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;pobranie-instalatora-i-klienta&#34;&gt;Pobranie instalatora i klienta&lt;/h3&gt;
+
+&lt;p&gt;Ze strony &lt;a href=&#34;https://github.com/okd-project/okd/releases&#34;&gt;https://github.com/okd-project/okd/releases&lt;/a&gt; pobieramy pliki
+- &lt;a href=&#34;https://github.com/okd-project/okd/releases/download/4.12.0-0.okd-2023-04-16-041331/openshift-client-linux-4.12.0-0.okd-2023-04-16-041331.tar.gz&#34;&gt;openshift-client-linux-4.12.0-0.okd-2023-04-16-041331.tar.gz&lt;/a&gt;
+- &lt;a href=&#34;https://github.com/okd-project/okd/releases/download/4.12.0-0.okd-2023-04-16-041331/openshift-install-linux-4.12.0-0.okd-2023-04-16-041331.tar.gz&#34;&gt;openshift-install-linux-4.12.0-0.okd-2023-04-16-041331.tar.gz&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;wget https://github.com/okd-project/okd/releases/download/4.12.0-0.okd-2023-04-16-041331/openshift-client-linux-4.12.0-0.okd-2023-04-16-041331.tar.gz
+wget https://github.com/okd-project/okd/releases/download/4.12.0-0.okd-2023-04-16-041331/openshift-install-linux-4.12.0-0.okd-2023-04-16-041331.tar.gz
+tar -zxvf openshift-client-linux-4.12.0-0.okd-2023-04-16-041331.tar.gz
+tar -zxvf openshift-install-linux-4.12.0-0.okd-2023-04-16-041331.tar.gz
+sudo mv kubectl oc openshift-install /usr/local/bin/
+oc version
+openshift-install version
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;przygotowanie-instalacji&#34;&gt;Przygotowanie instalacji&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;mkdir install_dir
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Tworzę plik install_dir/install-config.yaml&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+baseDomain: lab.local
+metadata:
+  name: okd
+
+compute:
+- hyperthreading: Enabled
+  name: worker
+  replicas: 0
+
+controlPlane:
+  hyperthreading: Enabled
+  name: master
+  replicas: 3
+
+networking:
+  clusterNetwork:
+  - cidr: 10.128.0.0/14
+    hostPrefix: 23
+  networkType: OpenShiftSDN
+  serviceNetwork:
+  - 172.30.0.0/16
+
+platform:
+  none: {}
+
+fips: false
+
+pullSecret: &#39;{&amp;quot;auths&amp;quot;:{&amp;quot;fake&amp;quot;:{&amp;quot;auth&amp;quot;: &amp;quot;bar&amp;quot;}}}&#39;
+sshKey: &#39;ssh-ed25519 AAAA...&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Ważne informacje - usrtawić domenę (baseDomain) i nazwę klastra (metadata.name) - razem wychodzi okd.lab.local czyli to, co jest skonfigurowane w DNSie.&lt;/p&gt;
+
+&lt;p&gt;Następnie należy usatwić klucz SSH i pull secret.&lt;/p&gt;
+
+&lt;p&gt;Jak plik będzie gotowy najlepiej go zbackupować - bo następne polecenie go usunie&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;cp ./install_dir/install-config.yaml ./install_dir/install-config.yaml.bak`
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Teraz tworzymy manifesty&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;openshift-install create manifests --dir=install_dir/
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Pozostaje nam utworzyć pliki ignition&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;openshift-install create ignition-configs --dir=install_dir/
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;hostowanie-plików-ignition&#34;&gt;Hostowanie plików ignition&lt;/h3&gt;
+
+&lt;p&gt;Teraz trzeba wystawić pliki na serwerze http&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo mkdir /var/www/html/okd
+sudo cp -R install_dir/* /var/www/html/okd/
+sudo chown -R apache: /var/www/html/
+sudo chmod -R 755 /var/www/html/
+sudo setsebool -P httpd_read_user_content 1
+sudo systemctl enable httpd
+sudo systemctl start httpd
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;i można sprawdzić, czy wszystko bangla&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;curl localhost:8080/okd/metadata.json
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;pobranie-obrazu-fedora-coreos&#34;&gt;Pobranie obrazu Fedora CoreOS&lt;/h3&gt;
+
+&lt;p&gt;Ze strony &lt;a href=&#34;https://fedoraproject.org/coreos/download/?stream=stable&#34;&gt;https://fedoraproject.org/coreos/download/?stream=stable&lt;/a&gt; należy pobrać 2 pliki: obraz raw Fedora CoreOS i plik sygnatury&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;wget https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/38.20230430.3.1/x86_64/fedora-coreos-38.20230430.3.1-metal.x86_64.raw.xz
+wget https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/38.20230430.3.1/x86_64/fedora-coreos-38.20230430.3.1-metal.x86_64.raw.xz.sig
+mv fedora-coreos-38.20230430.3.1-metal.x86_64.raw.xz fcos.raw.xz
+mv fedora-coreos-38.20230430.3.1-metal.x86_64.raw.xz.sig fcos.raw.xz.sig
+mv fcos.raw.* /var/www/html/okd
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;instalacja-bootstrapa&#34;&gt;Instalacja bootstrapa&lt;/h2&gt;
+
+&lt;p&gt;Mamy odpaloną mszynę okd-bootstrap, ale zatrzymaną na bootloaderze. Trzeba tam dopisać parametry uruchomieniowe - wszystko w jednej linii, ja tu wstawiłem znaki nowej linii aby było łatwiej czytać.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;coreos.inst.install_dev=/dev/nvme0n1
+coreos.inst.image_url=http://192.168.64.1:8080/okd/fcos.raw.xz
+coreos.inst.ignition_url=http://192.168.64.1:8080/okd/bootstrap.ign
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;instalacja-masterów&#34;&gt;Instalacja masterów&lt;/h2&gt;
+
+&lt;p&gt;Na masterach analogicznie - dopisujemy parametry uruchomieniowe. Jedyna różnica to uzycie pliku master.ign zamiast bootstrap.ign&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;coreos.inst.install_dev=/dev/nvme0n1
+coreos.inst.image_url=http://192.168.64.1:8080/okd/fcos.raw.xz
+coreos.inst.ignition_url=http://192.168.64.1:8080/okd/master.ign
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Teraz pozostaje czekać. Najłatwiej jest odpalić na bastionie&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;openshift-install --dir=install_dir/ wait-for bootstrap-complete --log-level=info
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;W pewnym momencie pójdzie komunikat, że bootstrapowanie jest zakończone i można się pozbyć maszyny okd-bootstrap.&lt;/p&gt;
+
+&lt;p&gt;Klaster cały czas się stawia, do pobrania jest sporo obrazów. Postępy można obserwować narzędziem oc (openshiftowym kubectl)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;export KUBECONFIG=~/install_dir/auth/kubeconfig
+oc get nodes -o wide
+oc get csr
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Warto sprawdzić, czy wszystkie CSRy są zatwierdzone - jeżeli nie, to można je zatwierdzić ręcznie (u mnie nie było potrzeby)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;oc get csr -ojson | jq -r &#39;.items[] | select(.status == {} ) | .metadata.name&#39; | xargs oc adm certificate approve
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Gdy z polecenia&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;oc get nodes
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;wszystkie nody będą jako Ready to znaczy, że CSRy są prawidłowo zatwierdzone. Teraz należy poczekać, aż zainstalują się wszystkie clusteroperatory&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;oc get clusteroperators
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;lub skrótowo&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;oc get co
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;U mnie to trwało długo, jakieś 2 godziny (mam wolne łącze). Warto też obserwować czy nie ma ErrImagePull, Crash czy innych błędów na podach przez&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;oc get pods -A
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Takie pody usuwałem.
+Może jeszcze wystąpić problem z machine configiem. Gdy&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;oc get mcp
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;nie zmienia statusu długo warto sprawdzić co się dzieje. W tym celu zrobiłem&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;oc get mcp master -o yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;i pojawiła się tam informacja&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;message: &#39;Node okd-master02 is reporting: &amp;quot;getting pending state from journal:
+      invalid character &#39;&#39;U&#39;&#39; looking for beginning of value&amp;quot;, Node okd-master03 is
+      reporting: &amp;quot;getting pending state from journal: invalid character &#39;&#39;U&#39;&#39; looking
+      for beginning of value&amp;quot;&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Jest to problem z journalem. W tym celu zalogowałem sie na podane nody&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ssh core@okd-master02.okd.lab.local
+sudo -i
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;[root@okd-master02 ~]# journalctl --verify
+Journal file /var/log/journal/674cc4f6256143379fd7935e328f9d5a/system@0005fc3742709c54-6eca9ce9bfe3ba10.journal~ uses an unsupported feature, ignoring file.
+Use SYSTEMD_LOG_LEVEL=debug journalctl --file=/var/log/journal/674cc4f6256143379fd7935e328f9d5a/system@0005fc3742709c54-6eca9ce9bfe3ba10.journal~ to see the details.
+PASS: /run/log/journal/b6e26c4db861474baaf198d6ef590c14/system.journal
+PASS: /var/log/journal/674cc4f6256143379fd7935e328f9d5a/system@9568609074994ae3930a1fa8619a9c92-0000000000000001-0005fc374221691a.journal
+PASS: /var/log/journal/674cc4f6256143379fd7935e328f9d5a/user-1000@ecb0a8ca75ee43acb8fb7aa5b5371224-000000000000847e-0005fc381cd80d81.journal
+PASS: /var/log/journal/674cc4f6256143379fd7935e328f9d5a/system@9568609074994ae3930a1fa8619a9c92-00000000000084bf-0005fc381d13973f.journal
+PASS: /var/log/journal/674cc4f6256143379fd7935e328f9d5a/user-1000@ecb0a8ca75ee43acb8fb7aa5b5371224-00000000000084c2-0005fc381d16f9f2.journal
+PASS: /var/log/journal/674cc4f6256143379fd7935e328f9d5a/system@9568609074994ae3930a1fa8619a9c92-000000000000ad1b-0005fc384862d10e.journal
+390c80: Data object references invalid entry at 4e1da0
+File corruption detected at /var/log/journal/674cc4f6256143379fd7935e328f9d5a/system.journal:4e19d0 (of 8388608 bytes, 61%).
+FAIL: /var/log/journal/674cc4f6256143379fd7935e328f9d5a/system.journal (Bad message)
+PASS: /var/log/journal/674cc4f6256143379fd7935e328f9d5a/user-1000@ecb0a8ca75ee43acb8fb7aa5b5371224-000000000000ad1e-0005fc384863d4c7.journal
+PASS: /var/log/journal/674cc4f6256143379fd7935e328f9d5a/user-1000.journal
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Tu mamy informacje o problemach z journalami. Usunąłem wpisy z journali&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[root@okd-master02 ~]# journalctl --vacuum-time=1m
+Journal file /var/log/journal/674cc4f6256143379fd7935e328f9d5a/system@0005fc3742709c54-6eca9ce9bfe3ba10.journal~ uses an unsupported feature, ignoring file.
+Use SYSTEMD_LOG_LEVEL=debug journalctl --file=/var/log/journal/674cc4f6256143379fd7935e328f9d5a/system@0005fc3742709c54-6eca9ce9bfe3ba10.journal~ to see the details.
+Vacuuming done, freed 0B of archived journals from /run/log/journal.
+Vacuuming done, freed 0B of archived journals from /run/log/journal/b6e26c4db861474baaf198d6ef590c14.
+Vacuuming done, freed 0B of archived journals from /var/log/journal.
+Deleted archived journal /var/log/journal/674cc4f6256143379fd7935e328f9d5a/system@0005fc3742709c54-6eca9ce9bfe3ba10.journal~ (8.0M).
+Deleted archived journal /var/log/journal/674cc4f6256143379fd7935e328f9d5a/system@9568609074994ae3930a1fa8619a9c92-0000000000000001-0005fc374221691a.journal (35.3M).
+Deleted archived journal /var/log/journal/674cc4f6256143379fd7935e328f9d5a/user-1000@ecb0a8ca75ee43acb8fb7aa5b5371224-000000000000847e-0005fc381cd80d81.journal (3.5M).
+Deleted archived journal /var/log/journal/674cc4f6256143379fd7935e328f9d5a/system@9568609074994ae3930a1fa8619a9c92-00000000000084bf-0005fc381d13973f.journal (12.1M).
+Deleted archived journal /var/log/journal/674cc4f6256143379fd7935e328f9d5a/user-1000@ecb0a8ca75ee43acb8fb7aa5b5371224-00000000000084c2-0005fc381d16f9f2.journal (3.6M).
+Deleted archived journal /var/log/journal/674cc4f6256143379fd7935e328f9d5a/system@9568609074994ae3930a1fa8619a9c92-000000000000ad1b-0005fc384862d10e.journal (22.7M).
+Deleted archived journal /var/log/journal/674cc4f6256143379fd7935e328f9d5a/user-1000@ecb0a8ca75ee43acb8fb7aa5b5371224-000000000000ad1e-0005fc384863d4c7.journal (3.7M).
+Vacuuming done, freed 89.2M of archived journals from /var/log/journal/674cc4f6256143379fd7935e328f9d5a.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Ponowna weryfikacja przebiegła prawidłowo&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[root@okd-master02 ~]# journalctl --verify
+PASS: /run/log/journal/b6e26c4db861474baaf198d6ef590c14/system.journal
+PASS: /var/log/journal/674cc4f6256143379fd7935e328f9d5a/system.journal
+PASS: /var/log/journal/674cc4f6256143379fd7935e328f9d5a/user-1000.journal
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Teraz Machine config się zakończył prawidłowo.&lt;/p&gt;
+
+&lt;p&gt;Klaster działa. Można się zalogować do konsoli. Adres konsoli mozna odczytać przy uzyciu oc&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;oc whoami --show-console
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;W tym przypadku jest to &lt;a href=&#34;https://console-openshift-console.apps.okd.lab.local&#34;&gt;https://console-openshift-console.apps.okd.lab.local&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Aby suię zalogować nalezy podać uzytkownika kubeadmin i hasła z pliku install_dir/auth/kubeadmin-password&lt;/p&gt;
+
+&lt;p&gt;Teraz pozostaje utworzenie uzytkonika i skonfigurowanie storage&amp;rsquo;u.&lt;/p&gt;
+
+&lt;h2 id=&#34;utworzenie-użytkowników&#34;&gt;Utworzenie użytkowników&lt;/h2&gt;
+
+&lt;p&gt;Czas utworzyć uzytkownika. Z kubeadmin nie należy bezpośrednio korzystać, warto potworzyć użytkowników imiennych. Najprostszym sposobem jest uzycie htpasswd. Najpierw wygenerujmy plik htpasswd&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;htpasswd -c -B -b users.htpasswd testuser testpassword
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Następnie można załadować ten plik&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;oc create secret generic htpass-secret --from-file=htpasswd=users.htpasswd -n openshift-config
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Aby z tego korzystać należy utworzyć htpasswd_provider. W tym celu należy tuworzyć plik htpasswd_provider.yaml&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: config.openshift.io/v1
+kind: OAuth
+metadata:
+  name: cluster
+spec:
+  identityProviders:
+  - name: htpasswd_provider
+    mappingMethod: claim
+    type: HTPasswd
+    htpasswd:
+      fileData:
+        name: htpass-secret
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;i załadować go do klastra&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;oc apply -f htpasswd_provider.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Teraz czas nadać uprawnienia. Pierwszemu uzytkownikowi warto nadać cluster-admin (czyli globalnego admina)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;oc adm policy add-cluster-role-to-user cluster-admin testuser
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Trzeba poczekać chwilę (u mnie ok. minuty) i po wejściu na konsolę zostaniemy przekirowani na ekran wybory providera tożsamości.&lt;/p&gt;
+
+&lt;h2 id=&#34;konfiguracja-storage-u&#34;&gt;Konfiguracja storage&amp;rsquo;u&lt;/h2&gt;
+
+&lt;p&gt;Aby klaster był całkowicie funkcjonalny brakuje ostatniej rzeczy - podłączenia storage&amp;rsquo;u. Na okd-bastion mamy skonfigurowany zasób NFS /var/nfs udostępniony dla sieci 192.168.64.0/24. Aby z niego skorzystać możemy podejść na 2 sposoby. W wariancie prostszym można konfigurować Persistent Volume. Konfigurując PV wskazuje się adres IP serwera i ścieżkę do zasobu, np. tak:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs1-pv
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    path: /var/nfs/nfs1
+    server: 192.168.64.1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Zaletą jest to, że działa to bez żadnych dodatkowych operatorów, wadą - że musimy definiować takie woluminy samodzielnie.&lt;/p&gt;
+
+&lt;p&gt;Jest drugie rozwiązanie - utworzenie Storage Class. Niestety, kubernetes (ani też OpenShift) nie ma wbudowanej storage classy do obsługi NFS. Jest jednak rozwiązanie w postaci zewnętrznego provisionera, co prawda niedostępnego przez OperatorHuba w OKD czy OpenShifcie.&lt;/p&gt;
+
+&lt;p&gt;Widziałem przynajmniej 2 takie rozwiązania, ja wybrałem # Kubernetes NFS Subdir External Provisioner (&lt;a href=&#34;https://github.com/kubernetes-sigs/nfs-subdir-external-provisioner&#34;&gt;https://github.com/kubernetes-sigs/nfs-subdir-external-provisioner&lt;/a&gt;). Na githubie jest ładna instrukcja, nawet zawierająca osobną część dla OpenShifta. W zasadzie całość to przepisanie fragmentu tej instrukcji, ale myślę, że warto to zawrzeć dla kompletności instrukcji.&lt;/p&gt;
+
+&lt;p&gt;Zaczynamy od sklonowania repozytorium:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;git clone https://github.com/kubernetes-sigs/nfs-subdir-external-provisioner.git
+cd nfs-subdir-external-provisioner
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Należy zacząć od utworzenia projektu/namespace&amp;rsquo;u dla provisionera, ja wybrałem &amp;ldquo;nfs-provisioner&amp;rdquo;. Zatem najpierw tworzymy projekt:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;oc new-project nfs-provisioner
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Po utrozeniu projektu zostanie on automatycznie wybrany. Teraz jedziemy dokładnie według instrukcji:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;NAMESPACE=`oc project -q`
+sed -i&#39;&#39; &amp;quot;s/namespace:.*/namespace: $NAMESPACE/g&amp;quot; ./deploy/rbac.yaml ./deploy/deployment.yaml
+oc create -f deploy/rbac.yaml
+oc adm policy add-scc-to-user hostmount-anyuid system:serviceaccount:$NAMESPACE:nfs-client-provisioner
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Następnie w pliku deplo/deployment.yaml należy ustawić adres do serwera NFS&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-client-provisioner
+  labels:
+    app: nfs-client-provisioner
+  # replace with namespace where provisioner is deployed
+  namespace: nfs-provisioner
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nfs-client-provisioner
+  template:
+    metadata:
+      labels:
+        app: nfs-client-provisioner
+    spec:
+      serviceAccountName: nfs-client-provisioner
+      containers:
+        - name: nfs-client-provisioner
+          image: registry.k8s.io/sig-storage/nfs-subdir-external-provisioner:v4.0.2
+          volumeMounts:
+            - name: nfs-client-root
+              mountPath: /persistentvolumes
+          env:
+            - name: PROVISIONER_NAME
+              value: k8s-sigs.io/nfs-subdir-external-provisioner
+            - name: NFS_SERVER
+              value: 192.168.64.1
+            - name: NFS_PATH
+              value: /var/nfs
+      volumes:
+        - name: nfs-client-root
+          nfs:
+            server: 192.168.64.1
+            path: /var/nfs
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Teraz należy załadować ten manifest&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;oc apply -f deploy/deployment.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Mając gotowego provisionera mozna utworzyć strorageclass. Domyślna jest w pliku deploy/class.yaml. Ja zdecydowałem się jednak minimalnie ją zmienić - a mianowicie ustawić jako domyślą:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  annotations:
+    storageclass.kubernetes.io/is-default-class: &amp;quot;true&amp;quot;
+  name: nfs-client
+parameters:
+  onDelete: delete
+  pathPattern: ${.PVC.namespace}/${.PVC.annotations.nfs.io/storage-path}
+provisioner: k8s-sigs.io/nfs-subdir-external-provisioner
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;podsumowanie&#34;&gt;Podsumowanie&lt;/h2&gt;
+
+&lt;p&gt;To kończy proces instalacji i minimalnej konfiguracji klastra OKD.&lt;/p&gt;
+
+&lt;p&gt;W przypadku &amp;ldquo;pełnego&amp;rdquo; OpenShifta (platnego) proces instalacji jest identyczny, różnice to pobranie właściwego instalatora (zamiast OKD z Githuba należy pobrać OpenShift od RedHata). Oczywiście, nic nmie stoi na przeszkodzie aby w swoim labie postawić taki klaster - istnieje wersja testowa na 60 dni. Całość do pobrania z &lt;a href=&#34;https://console.redhat.com/openshift/downloads&#34;&gt;https://console.redhat.com/openshift/downloads&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;Na zakończenie chciałbym jeszcze wskazać 2 ciekawe źrodła - jest to instrukcja instalacji klastra w wersji 4.5 autorstwa Craiga Robinsona &lt;a href=&#34;https://itnext.io/guide-installing-an-okd-4-5-cluster-508a2631cbee&#34;&gt;https://itnext.io/guide-installing-an-okd-4-5-cluster-508a2631cbee&lt;/a&gt; oraz pewnego rodzaju uzupełnienie w postaci zapisu streama z instalacji według tej instukcji  &lt;a href=&#34;https://www.youtube.com/watch?v=qh1zYW7BLxE&#34;&gt;https://www.youtube.com/watch?v=qh1zYW7BLxE&lt;/a&gt;. Warto przejrzeć też inne wpisy na blogu Craiga - jest tam wiele instrukcji dotyczących instalacji OpenShifta na różne sposoby.&lt;/p&gt;
+
+&lt;p&gt;Przy tworzeniu tej istrukcji pomocny też był ocp4-helpernode &lt;a href=&#34;https://github.com/redhat-cop/ocp4-helpernode&#34;&gt;https://github.com/redhat-cop/ocp4-helpernode&lt;/a&gt; - zautomatyzowany ansiblem sposób budowy bastiona. Właśnie z niego zaczerpnąłem pomysł postawienie własnego serwera DHCP a nie opieranie się na dodatkowej maszynie z postawionym pfsensem. Helpernode używa DHCP, jednak jest nastawiony na pozostawienie zewnętrznego gatewaya - ja nie chciałm mieć 2 serwerów DHCP w jednym segmencie sieci więc zdecydowałem się na skonfigurowanie routingu na bastionie.&lt;/p&gt;
+
+&lt;p&gt;Jednak helpernode ma jeszcze jedną bardzo cieawą funkcjonalniść - konfiguruje PXE Boot, co jeszcze bardziej ułatwia instalację kolejnych nodeów - bo wystarczy wybrać z menu krotego typu maszynę postawić (bootstrap, master, worker). Jest to ciekawe rowiazanie, ale według mnie na potrzeby małego klastra jest to przerost formy nad treścią.&lt;/p&gt;
+</description>
+    </item>
+    
+    
+    
+    <item>
+      <title>Linux - historia prawdziwa</title>
+      <link>https://kamm.github.io/2021/04/linux-historia-prawdziwa/</link>
+      <pubDate>Thu, 22 Apr 2021 15:56:15 CEST</pubDate>
+      <author>Kamil Mętrak</author>
+      <guid>https://kamm.github.io/2021/04/linux-historia-prawdziwa/</guid>
+      <description>&lt;p&gt;Tym razem będzie bardziej blognotka. Wielokrotnie byłem określany jako &amp;ldquo;ten windowsiarz&amp;rdquo;, co dla osób, które znają mnie trochę dłużej będzie zdziwieniem. Ale może po kolei.&lt;/p&gt;
+
+&lt;p&gt;Gdy zacząłem studia najpopularniejszymi systemami były 2 windowsy - 98 i 2000 (o ME chyba wszyscy chcą zapomnieć). Był to rok 2001, czyli chwila przed pojawieniem się XP. Z linuksem (dobra, GNU/Linux) miałem minimalne doświadczenie - próbowałem używać wcześniej RedHata (5.1 Manhattan), Monkey Linux, był też Mandrake Linux, ale tak jakoś nigdy w ten temat głębiej nie wszedłem. Głównym problemem była kwestia kompatybilności sprzętu.&lt;/p&gt;
+
+&lt;p&gt;Jednak na studiach kumpel pokazał mi Slackware i ten system jakoś mi się spodobał. Trochę hardcorowy, ale ciekawy. Trzeba się było trochę nakombinować, może trochę taka sztuka dla sztuki, ale udało mi się poznać linuksa i nawet udało mi się na nim normalnie pracować. Oczywiście, do gier pozostał windows.&lt;/p&gt;
+
+&lt;p&gt;Tak minęły jakieś 2-3 lata i kupiłem pierwszego laptopa. Chciałem tu spróbować czegoś innego. Slackware był fajny, ale tak trochę z zazdrością patrzyłem jak np. na debianie wystarcza apt-get install i gotowe, a ja muszę się męczyć jak jaskiniowiec. Postanowiłem na lapku postawić debiana. Moja przygoda wtedy skończyła się dosyć szybko - debian, jako system w którym wszystko jest stabilne czyli trochę przestarzałe - miał cały czas XFree86, a nie Xorg&amp;rsquo;a. To powodowało, że na moim lapku nie byłem w stanie dobrze skonfigurować grafiki. Cóż. Bywa. Nie pamiętam już dlaczego nie poszedłem w sida, ale dzisiaj to już nieistotne. Pojawiła się wtedy nowa dystrybucja, bazująca na debianie - Ubuntu. Spodobało mi się, że wszystko działa out-of-the-box i tak zacząłem używać &lt;em&gt;łubudubu&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;W 2006 roku zacząłem pracę. W pracy jednak systemem używanym na serwerach był windows więc aby skonfigurować u siebie jakieś środowisko deweloperskie potrzebowałem windowsa. I tak po kilku latach używania pingwina wróciłem do okien. A w linuksie byłem zdecydowanie poweruserem - wystarczy powiedzieć, że zdecydowałem się używać jako środowiska graficznego najpierw mocno dostrojonego pod siebie windowmakera, a później FVWM Crystal - chyba najpopularniejszego w tamtych czasach managera okien wśród ludzi chwalących się screenshotami pulpitu.&lt;/p&gt;
+
+&lt;p&gt;Jednak w pracy potrzebowałem windowsa. I tak w niego wsiąkłem. Jedna firma, druga, trzecia&amp;hellip; Ale zawsze mi brakowało trochę linuksa - najpierw była proteza w postaci przynajmniej paru narzędzi terminalowych - zawsze coś. Najpierw był MinGW. Potem krótki epizod z MacOSem - wreszcie mogłem pracować z &amp;ldquo;natywnym&amp;rdquo; bashem :) Potem powrót do windowsa, odkrycie cygwina i było już całkiem fajnie. W końcu zacząłem używać babuna (o którym pisałem w 2016 roku). W firmie, w której aktualnie pracuję nie ma problemu aby używać linuksa, ale jakoś się na to nie zdecydowałem.&lt;/p&gt;
+
+&lt;p&gt;Jakiś rok temu próbowałem na prywatnym komputerze wrócić do linuksa na desktopie - bo użycie na serwerach to dla mnie oczywistość i nie jest to dla mnie trudne, a w konsoli zawsze mi się najlepiej pracowało. Nie mogłem jednak sobie poradzić w nowym ubuntu. Coś mi cały czas nie pasowało, chociaż może w pewnym sensie przyzwyczaiłem się do pewnych udogodnień w windowsie.&lt;/p&gt;
+
+&lt;p&gt;W tym roku stwierdziłem, że kupię sobie coś ciekawego - thinkpada. Wybrałem X230. I oczywiście tu powędruje linux. Początkowo chciałem debiana, ale stwierdziłem że wypróbuję coś zupełnie innego. Dystrybucję o której tylko słyszałem, ale zawsze chwaloną i wielokrotnie porównywaną ze slackiem, z którego kiedyś korzystałem - Arch Linux.&lt;/p&gt;
+
+&lt;p&gt;Thinkpad jak to thinkpad - pod pingwinem obsługiwane wszystko bez najmniejszego problemu. Od archa zawsze odrzucało mnie przez pewne lenistwo - kwestia instalacji. Tak, ta dystrybucja nie ma instalatora. Nawet tak podstawowego jak 20 lat temu miał slackware czy debian. Nie - tu wszystko trzeba zrobić samemu. Jednak po przezwyciężeniu lenistwa i doczytaniu trochę w arch wiki postawiłem system. Chciałem go mieć dosyć minimalistyczny i zastanawiałem się nad instalacją w stylu konfiguracji Luke&amp;rsquo;a Smitha, ale nie pasowało mi to. Z powodu wspomnianego lenistwa bazowałem na czyjejś konfiguracji i trafiłem na fajny zestaw narzędzi - &lt;a href=&#34;https://github.com/addy-dclxvi/dotfiles&#34;&gt;GitHub - addy-dclxvi/dotfiles: My personal backup of my dotfiles on ThinkPad-X230-Debian-Openbox and Aspire-A514-Debian-Fluxbox&lt;/a&gt;. Czyli wybrałem openboksa - jako że pamiętam jeszcze blackboksa i późniejszego fluxboksa to mi bardzo podpasował. Addy używa debiana - tu musiałem trochę rzeczy wykombinować, bo nie zadziałały od razu, ale to nie problem. Uzupełniłem kilkoma pomysłami od Luke&amp;rsquo;a Smitha i tak udało mi się wreszcie wrócić do używania linuksa jako daily. I czuję,że była to dobra decyzja.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://kamm.github.io/images/Cheese_21.04.22_16.18.38.png&#34; alt=&#34;screen&#34; /&gt;&lt;/p&gt;
+</description>
+    </item>
+    
+    
+    
+    <item>
+      <title>Suckless po mojemu</title>
+      <link>https://kamm.github.io/2021/04/suckless-po-mojemu/</link>
+      <pubDate>Tue, 20 Apr 2021 20:18:00 CEST</pubDate>
+      <author>Kamil Mętrak</author>
+      <guid>https://kamm.github.io/2021/04/suckless-po-mojemu/</guid>
+      <description>&lt;p&gt;Tym razem znów o narzędziach z których korzystam. Zacznę od tego jak na to trafiłem. Oglądałem sobie tak z nudów youtuba i wpadł mi film Zmasło o tym, że zainstalował archa. Wtedy jeszcze nie byłem przekonany do tej dystrybucji, ale przejrzałem sobie co on tam ma - tiling managery do mnie nie przemawiają, ale zainteresował mnie st - simple terminal (lub jak inni wolą mowić suckless terminal). Zacząłem się interesować narzędziami suckless i miałem trochę mieszane uczucia. Z tego samego filmu dowiedziałem się też o kanale Luke&amp;rsquo;a Smitha. Gość opowiada fajne rzeczy o linuksie (czasem ogólnie, czasem specyficznie o archu), minimalistycznych narzedziach, filozofii wolnego oprogramowania - generalnie polecam.&lt;/p&gt;
+
+&lt;p&gt;Luke Smith udostępnił kilka ciekawych modyfikacji do st i spodobały mi się. Niestety, przynajmniej jedna z nich jest łatwa do ogarnięcia tylko na archu, ale to już dla mnie nie problem 😀. Tak zacząłem korzystać z st w miejsce urxvt.&lt;/p&gt;
+
+&lt;p&gt;Może trochę powiem o suckless. Te narzędzia są dosyć specyficzne. Filozofia suckless to narzędzia proste, możliwie przejrzyście napisane, o jak najmniejszej ilości kodu (czyli bez niepotrzebnych funkcjonalności). Tu przyładowo o st - xterm ma ok. 65k linii kodu, przedewszystkim ze względu na wsparcie dla emulacji różnych archaicznych terminali. Rxvt-unicode lub inaczej urxvt ma ok. 32k linii kodu. st ma ok 7k linii kodu. Jednak nie wszystko jest takie piękne. Narzędzia suckless oszczędzają linie kodu rezygnując także z plików konfiguracyjnych. Konfiguracja we wszystkich programach odbywa się poprzez edycję pliku config.h i przebudowanie programu. Z tego wynika kolejny problem - nie da się tego spaczkować i umieścić np. w repozytorium archa lub debiana - bo nie można tego konfigurować.&lt;/p&gt;
+
+&lt;p&gt;I tu zaczyna się moje ale do suckless. O ile terminal konfiguruje się w zasadzie raz i tyle, to w pakiecie suckless jest program do prowadzenia prezentacji - sent. Niby fajne, ale aby zmienić kolor tła lub font w prezentacji należy przekompilować sent. To nie pasuje.&lt;/p&gt;
+
+&lt;p&gt;Suckless ma teź swoj manager okien, jednak jest to manager kafelkowy (chyba tak należałoby przetłumaczyć tiling), ale to mi nie leży i na razie zostanę przy openboksie.&lt;/p&gt;
+
+&lt;p&gt;Jednak kolejne narzędzie tu już co innego - dmenu. W skrócie - jest to dynamiczne menu, z którego bardzo miło korzysta się w skryptach. Obsługiwane oczywiście w całości klawiaturą. W którymś następnym wpisie opiszę skrypty, z których korzystam.&lt;/p&gt;
+
+&lt;p&gt;Podsumowując - część rozwiązań suckless jest rzeczywiście fajnych, a ich minimalizm naprawdę fajny. Jednak druga część tych narzędzi to suckmore - zdecydowanie odbiegające od reszty, niezbyt przemyślane. Mam wrażenie, że taki sent był napisany po to aby przeprowadzić jedną prezentację, ewentualnie - programista napisał go tylko dla siebie i pod siebie.&lt;/p&gt;
+
+&lt;p&gt;Tyle&amp;hellip;&lt;/p&gt;
+</description>
+    </item>
+    
+    
+    
+    <item>
+      <title>screen - manager okien w terminalu tekstowym</title>
+      <link>https://kamm.github.io/2021/04/screen/</link>
+      <pubDate>Tue, 13 Apr 2021 16:37:15 CEST</pubDate>
+      <author>Kamil Mętrak</author>
+      <guid>https://kamm.github.io/2021/04/screen/</guid>
+      <description>
+
+&lt;p&gt;Cześć.&lt;/p&gt;
+
+&lt;p&gt;Od czasu pojawienia się koronawirusa cała moja praca odbywa się zdalnie. Niestety, wiele osób narzeka na stabilność VPNa - tym się nie będę zajmował ani wnikał w powody i propozycje rozwiązania. Zaproponuję pewną protezę, która pomoże w tym przypadku a jednocześnie da kilka innych możliwości pracy na systemach uniksowych.&lt;/p&gt;
+
+&lt;p&gt;Generalnie pomysł jest prosty i jest obecny np. przy połączeniu pulpitem zdalnym - czyli gdy zostanie zerwane połączenie sieciowe z serwerem to sesja jest odłączana a nie zrywana. Oznacza to tyle, że gdy stracimy połączenie sieciowe to procesy uruchomione na pulpicie zdalnym cały czas działają i po pierwsze możemy je tak zostawić gdy chcemy pozostawić jakiś długo działający proces albo zabezpieczyć się przed właśnie takim zerwaniem połączenia - np. wykonujemy jakiś update na bazie danych lub budujemy coś mavenem. Tak samo jest gdy używamy VNC. Nie będę wnikał w inne rozwiązania bo ich nie znam.&lt;/p&gt;
+
+&lt;p&gt;Ale nie zawsze chcemy używać środowiska graficznego - do wielu rzeczy wystarcza terminal - czyli wystarczy nam połączenie ssh. Jednak przy połączeniu SSH jeżeli połączenie zostanie zerwane to proces zostanie ubity. Czyli zbudowanie na serwerze aplikacji mavenem, gdzie budowa trwa godzinę nigdy się nie uda, gdy VPN zrywa połączenie po 30 minutach.&lt;/p&gt;
+
+&lt;p&gt;I tu wchodzi cały na biało (he he) screen. Oczywiście, ktoś powie &amp;ldquo;tmux może to samo i nawet więcej&amp;rdquo;. Tak, ale screen jest dużo prostszy w użyciu i do tego zastosowania wystarczy. Jednocześnie jest on dobrym wstępem do późniejszego użycia tmuxa.&lt;/p&gt;
+
+&lt;p&gt;Czym jest screen? Jak mówi &lt;em&gt;man&lt;/em&gt; jest to pełnoekranowy manager okien, który multipleksuje fizyczny terminal pomiędzy kilkoma procesami.&lt;/p&gt;
+
+&lt;p&gt;No dobra, ale to chyba nadal nie rozwiązuje problemu?&lt;/p&gt;
+
+&lt;p&gt;Otóż &lt;em&gt;nic bardziej mylnego&lt;/em&gt;. Taki zestaw okien można &lt;em&gt;odpiąć&lt;/em&gt; i rozłączyć się z SSH, a procesy w nim uruchomione nadal będą działać. Gdy sesja, w której był uruchomiony screen zostanie zabita to screen się odłączy. Później można ponownie takiego screena podłączyć i kontynuować pracę.&lt;/p&gt;
+
+&lt;p&gt;Najpierw instalacja, wprost z repozytorium odpowiedniego dla używanej dystrybucji.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo apt-get install screen
+sudo pacman -S screen
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Konfigurować nie ma co - jedynym powodem do utworzenia pliku konfiguracyjnego jaki miałem była chęć zmiany domyślnego skrótu klawiszowego - Ctrl+a - na coś innego. Ale to było związane z tym, że zacząłem używać tmuxa, jego domyślny skrót mi nie pasował (Ctrl+b), zmieniłem go na ten, do którego byłem przyzwyczajony w screenie więc screena też trzeba było zmienić, ale to rodziło kolejne problemy i przestałem tak grzebać.&lt;/p&gt;
+
+&lt;p&gt;Teraz czas na uruchomienie. Po prostu wpisujemy&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;screen
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Czyli mamy Ctrl+a, polecenie które rozpoczyna właściwy skrót klawiszowy. Bo w końcu mamy różne skróty klawiszowe w różnych aplikacjach i chcielibyśmy móc z nich korzystać. O ile w vimie to nie problem, to już w emacsie używane są skróty z ctrl, a nawet bash ma ich kilka. Dlatego screen używa takich skrótów &amp;ldquo;kolejkowanych&amp;rdquo;. Po wciśnięciu &lt;code&gt;ctrl+a&lt;/code&gt; dajemy właściwy skrót (np. &lt;code&gt;c&lt;/code&gt;). Screen przyjmie je w dwóch możliwych wariantach i oba obsłuży tak samo - czyli &lt;code&gt;ctrl+a c&lt;/code&gt; oraz &lt;code&gt;ctrl+a ctrl+c&lt;/code&gt; - chodzi o to, czy puścimy ctrl przed drugim klawiszem czy nie. Dla screena to bez różnicy.&lt;/p&gt;
+
+&lt;p&gt;Najważniejszym skrótem jest &lt;code&gt;ctrl+a d&lt;/code&gt; - jest to odpięcie screena, czyli zostawiamy go działającego i wychodzimy do punktu uruchomienia.&lt;/p&gt;
+
+&lt;p&gt;Aby wrócić do odpiętego screena wywołajmy&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;screen -r
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Jeżeli screen jest gdzieś przypięty, np. w drugim xtermie to nie pozwoli się przypiąć. Wywołanie screen bez parametrów utworzy za to drugiego screena. Wtedy już nawet gdy oba będą odpięte to screen nie będzie wiedział do którego się podpiąć i wypisze listę - wtedy należy podać PID procesu do którego chcemy się podpiąć.&lt;/p&gt;
+
+&lt;p&gt;Aby odpiąć screena podpiętego w innym oknie (lub np. w wiszącej sesji ssh) wywołujemy &lt;code&gt;screen -d&lt;/code&gt;. A jeżeli chcemy od razu zakończyć też proces z którego został uruchomiony screen, który odpinamy (czyli np. zamknąć tamto okno xterma lub rozłączyć połączenie SSH) to używamy &lt;code&gt;screen -D&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Przydatne może być też &lt;code&gt;screen -R&lt;/code&gt;. Oznacza to, że screen ma się podłączyć do istniejącej sesji. Jeżeli jest kilka to wypisze możliwe do podłączenia. Ale jeżeli nie znajdzie żadnej (żadnej nie ma lub nie ma żadnej niepodłączonej) to utworzy nową. &lt;code&gt;screen -RR&lt;/code&gt; zadziała podobnie, ale jeżeli znajdzie kilka niepodłączonych sesji to podłączy się do pierwszej z brzegu.&lt;/p&gt;
+
+&lt;p&gt;Opcje &lt;code&gt;-r&lt;/code&gt;, &lt;code&gt;-R&lt;/code&gt; oraz &lt;code&gt;-RR&lt;/code&gt; można łączyć z &lt;code&gt;-d&lt;/code&gt; i z &lt;code&gt;-D&lt;/code&gt;. W takim wypadku uruchomienie &lt;code&gt;screen -D -RR&lt;/code&gt; jest &lt;em&gt;najpotężniejsze&lt;/em&gt; - bo zawsze da jakąś sesję.&lt;/p&gt;
+
+&lt;p&gt;Teraz wróćmy do działającej sesji. Jeżeli zakończymy proces w screenie (ctrl+d, exit, logout, &amp;hellip;) to zamkniemy okno w screenie. Jeżeli zamkniemy ostatnie okno to zamkniemy całego screena.&lt;/p&gt;
+
+&lt;p&gt;Aby utworzyć nowe okno wywołujemy &lt;code&gt;ctrl+a c&lt;/code&gt;. Pierwsze okno ma numer 0, następne 1 itd. Przełączanie pomiędzy oknami osiągniemy używając &lt;code&gt;ctrl+a 0&lt;/code&gt;, &lt;code&gt;ctrl+a 1&lt;/code&gt; itd. lub &lt;code&gt;ctrl+a n&lt;/code&gt; i &lt;code&gt;ctrl+a p&lt;/code&gt;. Tak samo jak &lt;code&gt;n&lt;/code&gt; zadziała &lt;code&gt;spacja&lt;/code&gt;, a w miejsce &lt;code&gt;p&lt;/code&gt; możemy użyć &lt;code&gt;backspace&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Użycie &lt;code&gt;ctrl+a w&lt;/code&gt; pokaże listę dostępnych okien.&lt;/p&gt;
+
+&lt;p&gt;Warto też wiedzieć jak zabić okno - czasem jakiś proces się zawiesi. W xtermie po prostu zamykamy okno, w screenie jest do tego &lt;code&gt;ctrl+a k&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Tak na prawdę to wszystko co potrzeba wiedzieć na starcie. No może jeszcze &lt;code&gt;ctrl+a ?&lt;/code&gt;, które zwróci przypisanie klawiszy. A, jeszcze - co jeżeli potrzebujemy użyć &lt;code&gt;ctrl+a&lt;/code&gt; w aplikacji otwartej w screenie? używamy &lt;code&gt;ctrl+a a&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Z bardziej zaawansowanych rzeczy to zdarzyło mi się jeszcze korzystać z możliwości kopiowania w screenie przy użyciu klawiatury. Nie tyle do kopiowania ale do przewinięcia ekranu w górę. Służy do tego &lt;code&gt;ctrl+a [&lt;/code&gt;, następnie przesuwamy ekran strzałkami i wciskamy &lt;code&gt;enter&lt;/code&gt; aby rozpocząć kopiowanie. Zaznaczamy obszar używając znów strzałek i wciskamy ponownie &lt;code&gt;enter&lt;/code&gt;. Teraz tekst jest skopiowany do schowka (ale screenowego, nie tego dostępnego przez np. xclip). do wklejenia służy &lt;code&gt;ctrl+a ]&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Innych funkcji chyba nie zdarzyło mi się używać, ale polecam mana do screena - jest chyba jednym z lepszych.&lt;/p&gt;
+
+&lt;h2 id=&#34;przenoszenie-procesu-do-screena&#34;&gt;Przenoszenie procesu do screena&lt;/h2&gt;
+
+&lt;p&gt;Teraz coś trochę trudniejszego - jak przenieść działający proces do screena? Czasem okazuje się, że jednak proces będzie działał dłużej. Jak to zrobić? Będzie potrzebne dodatkowe narzędzie - &lt;code&gt;reptyr&lt;/code&gt;. Czyli&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sudo apt-get install reptyr
+sudo pacman -S reptyr
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;czy co tam macie u siebie. Teraz po kolei:&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;&lt;p&gt;Zatrzymujemy proces (nie kończymy!!!) &lt;code&gt;Ctrl+z&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Wznawiamy go w tle &lt;code&gt;bg&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Odpinamy go od terminala &lt;code&gt;disown %1&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Odpalamy screena &lt;code&gt;screen&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Znajdujemy PID procesu (pojawił się wcześniej na ekranie albo szukamy przy uzyciu ps, pstree, pgrep, czegokolwiek)&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Przypinamy proces do bieżącego terminala &lt;code&gt;reptyr &amp;lt;pid&amp;gt;&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;Reptyr może nie zadziałać - poleci komunikat&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Unable to attach to pid 52543: Operation not permitted
+The kernel denied permission while attaching. If your uid matches
+the target&#39;s, check the value of /proc/sys/kernel/yama/ptrace_scope.
+For more information, see /etc/sysctl.d/10-ptrace.conf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Generalnie to jest to zabezpieczenie, aby nie-root nie mógł robić ptrace na procesach nie-potomnych. Aby wyłączyć to zabezpieczenie odpalamy&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;co pozwoli na odpalenie reptyra, a po odpięciu screena możemy przywrócić domyślne ustawienie&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;echo 1 | sudo tee /proc/sys/kernel/yama/ptrace_scope
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Tym sposobem mamy proces przeniesiony do screena. Oczywiście łatwiej jest proces normalnie uruchomić w screenie, ale czasem nie bardzo możemy ubić proces i odpalić go na nowo, wtedy trzeba się trochę bardziej narobić&amp;hellip;&lt;/p&gt;
+
+&lt;p&gt;Miłego screenowania!&lt;/p&gt;
+</description>
+    </item>
+    
     
     
     <item>
@@ -493,8 +1470,6 @@ patrocinio/datapower                                                            
       <description>&lt;p&gt;A w zasadzie to ponownie zaczynam. Postanowiłem ponownie utworzyć tego bloga i zacząć wreszcie coś pisać. Brakowało mi miejsca gdzie mógłbym coś napisać, a miałem co więc tak wyszło. Będę starał się pisać technicznie, ale nie mogę tego zagwarantować - czasem może wyjść coś z życia innego niż tylko kodowanie :)&lt;/p&gt;
 </description>
     </item>
-    
-    
     
     
     
