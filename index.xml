@@ -56,7 +56,8 @@
 &lt;li&gt;bind-utils&lt;/li&gt;
 &lt;li&gt;haproxy&lt;/li&gt;
 &lt;li&gt;dhcp-server&lt;/li&gt;
-&lt;li&gt;httpd nfs-utils&lt;/li&gt;
+&lt;li&gt;httpd&lt;/li&gt;
+&lt;li&gt;nfs-utils&lt;/li&gt;
 &lt;li&gt;git&lt;/li&gt;
 &lt;/ul&gt;
 
