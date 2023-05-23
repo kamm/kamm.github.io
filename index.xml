@@ -394,8 +394,8 @@ echo &#39;/var/nfs 192.168.64.0/24(rw,sync,no_root_squash,no_all_squash,no_wdela
 Domyślne pull secret to&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;{
-	“auths”:{
-		“fake”:{“auth”: “bar”}
+	&amp;quot;auths&amp;quot;:{
+		&amp;quot;fake&amp;quot;:{&amp;quot;auth&amp;quot;: &amp;quot;bar&amp;quot;}
 	}
 }
 &lt;/code&gt;&lt;/pre&gt;
