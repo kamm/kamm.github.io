@@ -125,38 +125,45 @@
 
 <h2 id="wstęp">Wstęp</h2>
 
-<p>Do nauki OpenShifta potrzebowałem jakiejś instacji deweloperskiej &ldquo;do psucia&rdquo;. Głowne założenia - wsyztko musi być na maszynach wirtualnych, do uruchomienia na VirtualBoksie lub VMWare Workstation. Klaster ma składać się z 3 wezłów typu Control Plane (w dalszej części będę je nazywał master), które też obsługuja ruch aplikacyjny - czyli nie ma osobnych Compute Node. Takie rozwiązanie będzie odzwierciedlało klaster OpenShifta, na którym pracuję w firmie, ale ten mogę łatwiej psuć. Poza klasterem bedzie postawiona 1 dodatkowa maszyna - okd-bastion. Poza typowymi dla bastiona funkcjami (dostęp do klastra przez oc/kubectl) będzie też routerem, firewallem, serwerem DHCP, DNS, HTTP (potrzebne tylko na etapie instalacji w celu dostarczenia plików konfiguracyjnych instalatora), HAProxy oraz NFS dla storage&rsquo;u klastra - w skrócie maszyną do wszystkiego poza OKD.</p>
+<p>Do nauki OpenShifta potrzebowałem jakiejś instancji deweloperskiej &ldquo;do psucia&rdquo;. Główne założenia - wszystko musi być na maszynach wirtualnych, do uruchomienia na VirtualBoksie lub VMWare Workstation. Klaster ma składać się z 3 węzłów typu Control Plane (w dalszej części będę je nazywał master), które też obsługują ruch aplikacyjny - czyli nie ma osobnych Compute Node. Takie rozwiązanie będzie odzwierciedlało klaster OpenShifta, na którym pracuję w firmie, ale ten mogę łatwiej psuć. Poza klasterem będzie postawiona 1 dodatkowa maszyna - okd-bastion. Poza typowymi dla bastiona funkcjami (dostęp do klastra przez oc/kubectl) będzie też routerem, firewallem, serwerem DHCP, DNS, HTTP (potrzebne tylko na etapie instalacji w celu dostarczenia plików konfiguracyjnych instalatora), HAProxy oraz NFS dla storage&rsquo;u klastra - w skrócie maszyną do wszystkiego poza OKD.</p>
 
-<p>Jeszcze tak na szybko - co to jest OKD? OKD to &ldquo;The Community Distribution of Kubernetes that powersRed Hat OpenShift&rdquo; - czyli w zasadzie darmowa wersja OpenShifta, która ma kilka ograniczeń, ale w wiekszości są to braki oficjalnych i certyfikowanych operatorów, dostarczanych w ramach OpenShifta. Co ciekawe - dotarły do mnie słuchy o przynajmniej jednej firmie, która migruje się lub luż się przemigrowała z OpenShifta na OKD w swoich środowiskach produkcyjnych.</p>
+<p>Jeszcze tak na szybko - co to jest OKD? OKD to &ldquo;The Community Distribution of Kubernetes that poerrs Red Hat OpenShift&rdquo; - czyli w zasadzie darmowa wersja OpenShifta, która ma kilka ograniczeń, ale w większości są to braki oficjalnych i certyfikowanych operatorów, dostarczanych w ramach OpenShifta. Co ciekawe - dotarły do mnie słuchy o przynajmniej jednej firmie, która migruje się lub już się zmigrowała z OpenShifta na OKD w swoich środowiskach produkcyjnych.</p>
 
 <h2 id="postawienie-maszyn-wirtualnych">Postawienie maszyn wirtualnych</h2>
 
-<p>Będę uzywał VMWare Workstation, ale da się to wszystko zrobić np. na VirtualBoksie. Zaczynamy od wykreowania sieci - uruchamiam Virtual Network Editor i dodaję nową sieć (VMnet10) typu Host-only, IP podsieci 192.168.64.0, maska 255.255.255.0. Ważne - wyłączam DHCP dla tej sieci (będziemy stawiać własne DHCP). DHCP ze strony VMWare Workstation nie ma możliwości przypisania trwałych IP dla MAC Adresu.</p>
+<p>Będę używał VMWare Workstation, ale da się to wszystko zrobić np. na VirtualBoksie. Zaczynamy od wykreowania sieci - uruchamiam Virtual Network Editor i dodaję nową sieć (VMnet10) typu Host-only, IP podsieci 192.168.64.0, maska 255.255.255.0. Ważne - wyłączam DHCP dla tej sieci (będziemy stawiać własne DHCP). DHCP ze strony VMWare Workstation nie ma możliwości przypisania trwałych IP dla MAC Adresu.</p>
 
-<p>Następnie tworzę 5 maszyn wirtualnych:
-* okd-bastion
-* okd-bootstrap
-* okd-master01
-* okd-master02
-* okd-master03
-Każda z nich ma 4 rdzenie, 8192 MiB RAM i 120GiB dysku. Ewentualnie, dla maszyny okd-bastion można dać więcej (a nawet sporo więcej) dysku, bo będzie potrzebny dla NFSa. Ja dodałem drugi dysk (500GiB) później.</p>
+<p>Następnie tworzę 5 maszyn wirtualnych:</p>
+
+<ul>
+<li>okd-bastion</li>
+<li>okd-bootstrap</li>
+<li>okd-master01</li>
+<li>okd-master02</li>
+<li>okd-master03</li>
+</ul>
+
+<p>Każda z nich ma 4 rdzenie, 8192 MiB RAM i 120GiB dysku. Ewentualnie, dla maszyny okd-bastion można dać więcej (a nawet sporo więcej) dysku, bo będzie potrzebny dla NFSa. Ja dodałem drugi dysk (500GiB) później.</p>
 
 <p>Dla okd-bastion dodałem 2 interfejsy sieciowe - pierwszy jako bridged network, drugi jako host-only ze wskazaniem sieci na VMnet10.</p>
 
-<p>Na maszynach bootrap i masterach należy podmontować iso Fedora CoreOS <a href="https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/38.20230430.3.1/x86_64/fedora-coreos-38.20230430.3.1-live.x86_64.iso">https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/38.20230430.3.1/x86_64/fedora-coreos-38.20230430.3.1-live.x86_64.iso</a> - ja odpaliłem maszyny i wciśnąłem TAB na etapie boot loadera - aby system nie startował, ale maszyna aby była uruchomiona - bo potrzebuję pobrać ich MAC adresy, a te w VMWare są losowane po uruchomieniu.</p>
+<p>Na maszynach bootrap i masterach należy podmontować iso Fedora CoreOS <a href="https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/38.20230430.3.1/x86_64/fedora-coreos-38.20230430.3.1-live.x86_64.iso">https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/38.20230430.3.1/x86_64/fedora-coreos-38.20230430.3.1-live.x86_64.iso</a> - ja odpaliłem maszyny i wcisnąłem TAB na etapie boot loadera - aby system nie startował, ale maszyna aby była uruchomiona - bo potrzebuję pobrać ich MAC adresy, a te w VMWare są losowane po uruchomieniu.</p>
 
 <h2 id="maszyna-okd-bastion">Maszyna okd-bastion</h2>
 
 <p>Teraz okd-bastion. Zainstalowałem na niej Oracle Linux 9.2, ale może być w zasadzie dowolny linux. Bez żadnych dziwactw, może poza tym, że dałem całość na 1 FS (czyli dysk podmontowany jako /, bez osobnych dla /home itp).</p>
 
-<p>Po instalacji należy doinstalować kilka pakietów:
-- epel-release
-- bind
-- bind-utils
-- haproxy
-- dhcp-server
-- httpd nfs-utils
-- git</p>
+<p>Po instalacji należy doinstalować kilka pakietów:</p>
+
+<ul>
+<li>epel-release</li>
+<li>bind</li>
+<li>bind-utils</li>
+<li>haproxy</li>
+<li>dhcp-server</li>
+<li>httpd nfs-utils</li>
+<li>git</li>
+</ul>
 
 <p>Dodatkowo warto zainstalować jq</p>
 
@@ -484,7 +491,7 @@ echo '/var/nfs 192.168.64.0/24(rw,sync,no_root_squash,no_all_squash,no_wdelay)' 
 
 <p>Pierwszą jest przygotowanie plików instalacyjnych. Te pliki będą zawierały całą startową konfigurację klastra (którą pozostawiam domyślną) i wskazanie kluczy SSH do załadowania na maszynach oraz pull secretów do pobrania obrazów z registry redhatowych. Z tych plików następnie są generowane pliki ignition, które zawierają instrukcje dla instalatora Fedora CoreOS, który robi całą resztę.</p>
 
-<p>W drugim etapie nejpierw odpalamy instalację CoreOSa na maszynie okd-bootstrap, gdzie zostaje postawiony minimalistyczny klaster, do którego następnie zostają dopięte węzły master. W momencie, gdy klaster na nodach master będzie juz w stanie sam działać to bootstrap się złozy i nie będzie więcej potrzebny - można go wyłączyć i usunąć. Z tego powodu nawet przy instalacjach typu baremetal maszyna bootstrap jest stawiana jako wirtualna - bo jest potrzebna tylko podczas instalacji.</p>
+<p>W drugim etapie najpierw odpalamy instalację CoreOSa na maszynie okd-bootstrap, gdzie zostaje postawiony minimalistyczny klaster, do którego następnie zostają dopięte węzły master. W momencie, gdy klaster na nodach master będzie już w stanie sam działać to bootstrap się złoży i nie będzie więcej potrzebny - można go wyłączyć i usunąć. Z tego powodu nawet przy instalacjach typu baremetal maszyna bootstrap jest stawiana jako wirtualna - bo jest potrzebna tylko podczas instalacji.</p>
 
 <h3 id="pull-secret">pull secret</h3>
 
@@ -571,9 +578,9 @@ pullSecret: '{&quot;auths&quot;:{&quot;fake&quot;:{&quot;auth&quot;: &quot;bar&q
 sshKey: 'ssh-ed25519 AAAA...'
 </code></pre>
 
-<p>Ważne informacje - usrtawić domenę (baseDomain) i nazwę klastra (metadata.name) - razem wychodzi okd.lab.local czyli to, co jest skonfigurowane w DNSie.</p>
+<p>Ważne informacje - ustawić domenę (baseDomain) i nazwę klastra (metadata.name) - razem wychodzi okd.lab.local czyli to, co jest skonfigurowane w DNSie.</p>
 
-<p>Następnie należy usatwić klucz SSH i pull secret.</p>
+<p>Następnie należy ustawić klucz SSH i pull secret.</p>
 
 <p>Jak plik będzie gotowy najlepiej go zbackupować - bo następne polecenie go usunie</p>
 
@@ -621,7 +628,7 @@ mv fcos.raw.* /var/www/html/okd
 
 <h2 id="instalacja-bootstrapa">Instalacja bootstrapa</h2>
 
-<p>Mamy odpaloną mszynę okd-bootstrap, ale zatrzymaną na bootloaderze. Trzeba tam dopisać parametry uruchomieniowe - wszystko w jednej linii, ja tu wstawiłem znaki nowej linii aby było łatwiej czytać.</p>
+<p>Mamy odpaloną maszynę okd-bootstrap, ale zatrzymaną na bootloaderze. Trzeba tam dopisać parametry uruchomieniowe - wszystko w jednej linii, ja tu wstawiłem znaki nowej linii aby było łatwiej czytać.</p>
 
 <pre><code>coreos.inst.install_dev=/dev/nvme0n1
 coreos.inst.image_url=http://192.168.64.1:8080/okd/fcos.raw.xz
@@ -630,7 +637,7 @@ coreos.inst.ignition_url=http://192.168.64.1:8080/okd/bootstrap.ign
 
 <h2 id="instalacja-masterów">Instalacja masterów</h2>
 
-<p>Na masterach analogicznie - dopisujemy parametry uruchomieniowe. Jedyna różnica to uzycie pliku master.ign zamiast bootstrap.ign</p>
+<p>Na masterach analogicznie - dopisujemy parametry uruchomieniowe. Jedyna różnica to użycie pliku master.ign zamiast bootstrap.ign</p>
 
 <pre><code>coreos.inst.install_dev=/dev/nvme0n1
 coreos.inst.image_url=http://192.168.64.1:8080/okd/fcos.raw.xz
@@ -695,7 +702,7 @@ Może jeszcze wystąpić problem z machine configiem. Gdy</p>
       for beginning of value&quot;'
 </code></pre>
 
-<p>Jest to problem z journalem. W tym celu zalogowałem sie na podane nody</p>
+<p>Jest to problem z journalem. W tym celu zalogowałem się na podane nody</p>
 
 <pre><code>ssh core@okd-master02.okd.lab.local
 sudo -i
@@ -745,20 +752,20 @@ PASS: /var/log/journal/674cc4f6256143379fd7935e328f9d5a/user-1000.journal
 
 <p>Teraz Machine config się zakończył prawidłowo.</p>
 
-<p>Klaster działa. Można się zalogować do konsoli. Adres konsoli mozna odczytać przy uzyciu oc</p>
+<p>Klaster działa. Można się zalogować do konsoli. Adres konsoli można odczytać przy użyciu oc</p>
 
 <pre><code>oc whoami --show-console
 </code></pre>
 
 <p>W tym przypadku jest to <a href="https://console-openshift-console.apps.okd.lab.local">https://console-openshift-console.apps.okd.lab.local</a></p>
 
-<p>Aby suię zalogować nalezy podać uzytkownika kubeadmin i hasła z pliku install_dir/auth/kubeadmin-password</p>
+<p>Aby się zalogować należy podać użytkownika kubeadmin i hasła z pliku install_dir/auth/kubeadmin-password</p>
 
-<p>Teraz pozostaje utworzenie uzytkonika i skonfigurowanie storage&rsquo;u.</p>
+<p>Teraz pozostaje utworzenie użytkownika i skonfigurowanie storage&rsquo;u.</p>
 
 <h2 id="utworzenie-użytkowników">Utworzenie użytkowników</h2>
 
-<p>Czas utworzyć uzytkownika. Z kubeadmin nie należy bezpośrednio korzystać, warto potworzyć użytkowników imiennych. Najprostszym sposobem jest uzycie htpasswd. Najpierw wygenerujmy plik htpasswd</p>
+<p>Czas utworzyć użytkownika. Z kubeadmin nie należy bezpośrednio korzystać, warto potworzyć użytkowników imiennych. Najprostszym sposobem jest użycie htpasswd. Najpierw wygenerujmy plik htpasswd</p>
 
 <pre><code>htpasswd -c -B -b users.htpasswd testuser testpassword
 </code></pre>
@@ -768,7 +775,7 @@ PASS: /var/log/journal/674cc4f6256143379fd7935e328f9d5a/user-1000.journal
 <pre><code>oc create secret generic htpass-secret --from-file=htpasswd=users.htpasswd -n openshift-config
 </code></pre>
 
-<p>Aby z tego korzystać należy utworzyć htpasswd_provider. W tym celu należy tuworzyć plik htpasswd_provider.yaml</p>
+<p>Aby z tego korzystać należy utworzyć htpasswd_provider. W tym celu należy utworzyć plik htpasswd_provider.yaml</p>
 
 <pre><code>apiVersion: config.openshift.io/v1
 kind: OAuth
@@ -789,12 +796,12 @@ spec:
 <pre><code>oc apply -f htpasswd_provider.yaml
 </code></pre>
 
-<p>Teraz czas nadać uprawnienia. Pierwszemu uzytkownikowi warto nadać cluster-admin (czyli globalnego admina)</p>
+<p>Teraz czas nadać uprawnienia. Pierwszemu użytkownikowi warto nadać cluster-admin (czyli globalnego admina)</p>
 
 <pre><code>oc adm policy add-cluster-role-to-user cluster-admin testuser
 </code></pre>
 
-<p>Trzeba poczekać chwilę (u mnie ok. minuty) i po wejściu na konsolę zostaniemy przekirowani na ekran wybory providera tożsamości.</p>
+<p>Trzeba poczekać chwilę (u mnie ok. minuty) i po wejściu na konsolę zostaniemy przekierowani na ekran wybory providera tożsamości.</p>
 
 <h2 id="konfiguracja-storage-u">Konfiguracja storage&rsquo;u</h2>
 
@@ -832,7 +839,7 @@ cd nfs-subdir-external-provisioner
 <pre><code>oc new-project nfs-provisioner
 </code></pre>
 
-<p>Po utrozeniu projektu zostanie on automatycznie wybrany. Teraz jedziemy dokładnie według instrukcji:</p>
+<p>Po utworzeniu projektu zostanie on automatycznie wybrany. Teraz jedziemy dokładnie według instrukcji:</p>
 
 <pre><code>NAMESPACE=`oc project -q`
 sed -i'' &quot;s/namespace:.*/namespace: $NAMESPACE/g&quot; ./deploy/rbac.yaml ./deploy/deployment.yaml
@@ -840,7 +847,7 @@ oc create -f deploy/rbac.yaml
 oc adm policy add-scc-to-user hostmount-anyuid system:serviceaccount:$NAMESPACE:nfs-client-provisioner
 </code></pre>
 
-<p>Następnie w pliku deplo/deployment.yaml należy ustawić adres do serwera NFS</p>
+<p>Następnie w pliku deploy/deployment.yaml należy ustawić adres do serwera NFS</p>
 
 <pre><code>apiVersion: apps/v1
 kind: Deployment
@@ -888,7 +895,7 @@ spec:
 <pre><code>oc apply -f deploy/deployment.yaml
 </code></pre>
 
-<p>Mając gotowego provisionera mozna utworzyć strorageclass. Domyślna jest w pliku deploy/class.yaml. Ja zdecydowałem się jednak minimalnie ją zmienić - a mianowicie ustawić jako domyślą:</p>
+<p>Mając gotowego provisionera można utworzyć strorageclass. Domyślna jest w pliku deploy/class.yaml. Ja zdecydowałem się jednak minimalnie ją zmienić - a mianowicie ustawić jako domyślą:</p>
 
 <pre><code>apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -906,13 +913,13 @@ provisioner: k8s-sigs.io/nfs-subdir-external-provisioner
 
 <p>To kończy proces instalacji i minimalnej konfiguracji klastra OKD.</p>
 
-<p>W przypadku &ldquo;pełnego&rdquo; OpenShifta (platnego) proces instalacji jest identyczny, różnice to pobranie właściwego instalatora (zamiast OKD z Githuba należy pobrać OpenShift od RedHata). Oczywiście, nic nmie stoi na przeszkodzie aby w swoim labie postawić taki klaster - istnieje wersja testowa na 60 dni. Całość do pobrania z <a href="https://console.redhat.com/openshift/downloads">https://console.redhat.com/openshift/downloads</a>.</p>
+<p>W przypadku &ldquo;pełnego&rdquo; OpenShifta (płatnego) proces instalacji jest identyczny, różnice to pobranie właściwego instalatora (zamiast OKD z Githuba należy pobrać OpenShift od RedHata). Oczywiście, nic nie stoi na przeszkodzie aby w swoim labie postawić taki klaster - istnieje wersja testowa na 60 dni. Całość do pobrania z <a href="https://console.redhat.com/openshift/downloads">https://console.redhat.com/openshift/downloads</a>.</p>
 
-<p>Na zakończenie chciałbym jeszcze wskazać 2 ciekawe źrodła - jest to instrukcja instalacji klastra w wersji 4.5 autorstwa Craiga Robinsona <a href="https://itnext.io/guide-installing-an-okd-4-5-cluster-508a2631cbee">https://itnext.io/guide-installing-an-okd-4-5-cluster-508a2631cbee</a> oraz pewnego rodzaju uzupełnienie w postaci zapisu streama z instalacji według tej instukcji  <a href="https://www.youtube.com/watch?v=qh1zYW7BLxE">https://www.youtube.com/watch?v=qh1zYW7BLxE</a>. Warto przejrzeć też inne wpisy na blogu Craiga - jest tam wiele instrukcji dotyczących instalacji OpenShifta na różne sposoby.</p>
+<p>Na zakończenie chciałbym jeszcze wskazać 2 ciekawe źródła - jest to instrukcja instalacji klastra w wersji 4.5 autorstwa Craiga Robinsona <a href="https://itnext.io/guide-installing-an-okd-4-5-cluster-508a2631cbee">https://itnext.io/guide-installing-an-okd-4-5-cluster-508a2631cbee</a> oraz pewnego rodzaju uzupełnienie w postaci zapisu streama z instalacji według tej instrukcji  <a href="https://www.youtube.com/watch?v=qh1zYW7BLxE">https://www.youtube.com/watch?v=qh1zYW7BLxE</a>. Warto przejrzeć też inne wpisy na blogu Craiga - jest tam wiele instrukcji dotyczących instalacji OpenShifta na różne sposoby.</p>
 
-<p>Przy tworzeniu tej istrukcji pomocny też był ocp4-helpernode <a href="https://github.com/redhat-cop/ocp4-helpernode">https://github.com/redhat-cop/ocp4-helpernode</a> - zautomatyzowany ansiblem sposób budowy bastiona. Właśnie z niego zaczerpnąłem pomysł postawienie własnego serwera DHCP a nie opieranie się na dodatkowej maszynie z postawionym pfsensem. Helpernode używa DHCP, jednak jest nastawiony na pozostawienie zewnętrznego gatewaya - ja nie chciałm mieć 2 serwerów DHCP w jednym segmencie sieci więc zdecydowałem się na skonfigurowanie routingu na bastionie.</p>
+<p>Przy tworzeniu tej instrukcji pomocny też był ocp4-helpernode <a href="https://github.com/redhat-cop/ocp4-helpernode">https://github.com/redhat-cop/ocp4-helpernode</a> - zautomatyzowany ansiblem sposób budowy bastiona. Właśnie z niego zaczerpnąłem pomysł postawienie własnego serwera DHCP a nie opieranie się na dodatkowej maszynie z postawionym pfsensem. Helpernode używa DHCP, jednak jest nastawiony na pozostawienie zewnętrznego gatewaya - ja nie chciałem mieć 2 serwerów DHCP w jednym segmencie sieci więc zdecydowałem się na skonfigurowanie routingu na bastionie.</p>
 
-<p>Jednak helpernode ma jeszcze jedną bardzo cieawą funkcjonalniść - konfiguruje PXE Boot, co jeszcze bardziej ułatwia instalację kolejnych nodeów - bo wystarczy wybrać z menu krotego typu maszynę postawić (bootstrap, master, worker). Jest to ciekawe rowiazanie, ale według mnie na potrzeby małego klastra jest to przerost formy nad treścią.</p>
+<p>Jednak helpernode ma jeszcze jedną bardzo ciekawą funkcjonalność - konfiguruje PXE Boot, co jeszcze bardziej ułatwia instalację kolejnych nodeów - bo wystarczy wybrać z menu którego typu maszynę postawić (bootstrap, master, worker). Jest to ciekawe rozwiązanie, ale według mnie na potrzeby małego klastra jest to przerost formy nad treścią.</p>
 
     
 
